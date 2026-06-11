@@ -1,0 +1,9 @@
+Attaching 2 probes...
+페이지 폴트 집계 중... (Ctrl-C 로 멈추면 결과가 나옵니다)
+
+
+@faults[bpftrace]: 1
+@faults[timeout]: 2
+@faults[seq]: 70
+@faults[uname]: 697
+@faults[bash]: 1056

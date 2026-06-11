@@ -1,0 +1,29 @@
+#!/usr/bin/env bpftrace
+/*
+ * syscall_top.bt — 어떤 프로세스가 시스템콜을 많이 부르나 (Top 집계)
+ *
+ * [무엇을 하나]
+ *   추적하는 동안 (프로세스 이름, 시스템콜)별 호출 횟수를 세서, 종료 시 정리해 보여준다.
+ *   9주차 실습(syscall-tracer)의 '맵 집계' 아이디어를 한 줄짜리로 맛본다.
+ *
+ * [어떻게 도나]
+ *   - tracepoint:raw_syscalls:sys_enter : "어떤 시스템콜이든 들어오는 순간" (모든 시스템콜 공통 입구)
+ *   - @[comm] = count() : comm(프로세스 이름)별로 1씩 누적하는 맵
+ *
+ * [실행]
+ *   sudo bpftrace syscall_top.bt        (몇 초 두었다가 Ctrl-C → 결과가 정렬되어 나옴)
+ */
+
+BEGIN {
+    printf("시스템콜 호출 집계 중... (Ctrl-C 로 멈추면 결과가 나옵니다)\n");
+}
+
+// 프로세스별 총 시스템콜 횟수
+tracepoint:raw_syscalls:sys_enter {
+    @by_process[comm] = count();   // by_process = 프로세스별 횟수
+}
+
+END {
+    printf("\n=== 프로세스별 시스템콜 호출 횟수 (적은→많은 순) ===\n");
+    // bpftrace 는 END 에서 맵을 자동으로 정렬·출력한다.
+}

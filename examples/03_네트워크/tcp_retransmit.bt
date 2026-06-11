@@ -1,0 +1,28 @@
+#!/usr/bin/env bpftrace
+/*
+ * tcp_retransmit.bt — TCP 재전송 잡기 (네트워크 품질 신호)
+ *
+ * [무엇을 하나]
+ *   TCP 패킷이 재전송될 때마다 알린다. 재전송이 잦다면 네트워크 혼잡/손실의 신호다.
+ *   "왜 이 연결이 느리지?"를 커널 단에서 들여다보는 관측 예제.
+ *
+ * [어떻게 도나]
+ *   - tracepoint:tcp:tcp_retransmit_skb : 커널이 TCP 세그먼트를 재전송할 때 발생하는 안정적 추적점
+ *
+ * [실행]
+ *   sudo bpftrace tcp_retransmit.bt
+ *   (재전송은 평소엔 드물다. 활발한 네트워크 활동 중에 가끔 잡힌다. 안 잡혀도 정상 — '도구가 켜져 동작 중'이 핵심. Ctrl-C 종료)
+ *
+ * [관련] 14주차(성능 분석). 네트워크 지연/손실 진단의 출발점.
+ */
+
+BEGIN {
+    printf("TCP 재전송을 지켜봅니다... (드물게 발생, Ctrl-C 로 종료)\n");
+    printf("%-8s %s\n", "시각", "재전송 발생");
+}
+
+tracepoint:tcp:tcp_retransmit_skb {
+    time("%H:%M:%S ");
+    printf("재전송 1건 (커널이 TCP 세그먼트를 다시 보냄)\n");
+    @retransmits = count();   // retransmits = 재전송 총합
+}

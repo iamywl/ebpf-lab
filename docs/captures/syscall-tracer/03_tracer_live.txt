@@ -1,0 +1,52 @@
+eBPF 시스템콜 추적기를 로드하는 중...
+추적 시작: 전체 프로세스, 기간 3.0초
+
+
+추적 종료 (경과 3.1초). 결과를 집계합니다.
+
+=== PID 7133  (python3)  총 79 회 ===
+  시스템콜                           횟수
+  -------------------- ------------
+  bpf                            59
+  clock_nanosleep                15
+  write                           4
+  rt_sigaction                    1
+
+=== PID 691  (tart-guest-agen)  총 49 회 ===
+  시스템콜                           횟수
+  -------------------- ------------
+  futex                          30
+  nanosleep                       9
+  accept4                         3
+  epoll_pwait                     3
+  tgkill                          1
+  rt_sigreturn                    1
+  ... 외 2개 시스템콜
+
+=== PID 355  (multipathd)  총 19 회 ===
+  시스템콜                           횟수
+  -------------------- ------------
+  futex                           9
+  write                           7
+  clock_nanosleep                 3
+
+=== PID 7131  (sshd)  총 18 회 ===
+  시스템콜                           횟수
+  -------------------- ------------
+  rt_sigprocmask                  8
+  ppoll                           4
+  write                           2
+  getrandom                       2
+  read                            2
+
+=== PID 678  (gmain)  총 4 회 ===
+  시스템콜                           횟수
+  -------------------- ------------
+  inotify_add_watch               3
+  ppoll                           1
+
+=== PID 697  (gmain)  총 2 회 ===
+  시스템콜                           횟수
+  -------------------- ------------
+  ppoll                           1
+  inotify_add_watch               1

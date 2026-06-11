@@ -1,0 +1,6 @@
+Attaching 2 probes...
+프로세스     PID    목적지 IP:포트
+curl             33488  127.0.0.1:22
+curl             33490  1.1.1.1:80
+
+

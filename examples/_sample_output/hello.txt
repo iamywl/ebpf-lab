@@ -1,0 +1,8 @@
+Attaching 3 probes...
+eBPF 시작! 새 프로그램 실행을 지켜봅니다. (다른 창에서 명령을 쳐보세요, Ctrl-C 로 종료)
+안녕! PID 33239  (bash) 가 실행: /usr/bin/ls
+안녕! PID 33240  (bash) 가 실행: /usr/bin/date
+안녕! PID 33241  (bash) 가 실행: /bin/echo
+eBPF 종료. 안녕히 가세요!
+
+

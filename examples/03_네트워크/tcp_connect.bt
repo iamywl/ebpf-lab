@@ -1,0 +1,28 @@
+#!/usr/bin/env bpftrace
+/*
+ * tcp_connect.bt — 어떤 프로세스가 어디로 TCP 접속을 시도하나 (아웃바운드)
+ *
+ * [무엇을 하나]
+ *   프로그램이 바깥으로 TCP 연결을 걸 때마다 (프로세스, 목적지 IP, 포트)를 보여준다.
+ *   10주차 실습(netflow-tracer)의 bpftrace 한 줄 버전.
+ *
+ * [어떻게 도나]
+ *   - kprobe:tcp_v4_connect : 커널의 IPv4 TCP 연결 함수에 부착
+ *   - 두 번째 인자(struct sockaddr *)에서 목적지 주소/포트를 꺼낸다.
+ *   - ntop()/ntohs : 네트워크 바이트오더를 사람이 읽는 IP/포트로 변환 (10주차 §3.1 참고)
+ *
+ * [실행]
+ *   sudo bpftrace tcp_connect.bt        (다른 창에서  curl http://example.com  또는  ssh localhost  → 잡힘. Ctrl-C)
+ *
+ * [관련] 10·12주차(네트워크). 실제 BCC 도구 tcpconnect-bpfcc 의 축소판.
+ */
+
+BEGIN {
+    printf("%-16s %-6s %s\n", "프로세스", "PID", "목적지 IP:포트");
+}
+
+kprobe:tcp_v4_connect {
+    $sk = (struct sockaddr_in *)arg1;          // 두 번째 인자 = 목적지 주소 구조체
+    $port = ($sk->sin_port >> 8) | (($sk->sin_port & 0xff) << 8);  // 네트워크→호스트 바이트오더(ntohs)
+    printf("%-16s %-6d %s:%d\n", comm, pid, ntop($sk->sin_addr.s_addr), $port);
+}

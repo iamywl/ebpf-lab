@@ -1,0 +1,7 @@
+Attaching 2 probes...
+파일 읽기(byte) 집계 중... (Ctrl-C 로 멈추면 결과가 나옵니다)
+
+
+@read_bytes[systemd-journal]: 8
+@read_bytes[ls]: 49600
+@read_bytes[cat]: 271168

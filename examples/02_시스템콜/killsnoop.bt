@@ -1,0 +1,25 @@
+#!/usr/bin/env bpftrace
+/*
+ * killsnoop.bt — 누가 누구에게 시그널(kill)을 보내는지 잡기
+ *
+ * [무엇을 하나]
+ *   kill 시스템콜을 가로채, (보낸 프로세스, 받는 PID, 시그널 번호)를 보여준다.
+ *   "누가 이 프로세스를 죽였나?" 같은 추적에 쓰인다.
+ *
+ * [어떻게 도나]
+ *   - tracepoint:syscalls:sys_enter_kill : kill() 시스템콜 진입점
+ *   - args.pid : 대상 PID,  args.sig : 시그널 번호(예: 9=SIGKILL, 15=SIGTERM, 2=SIGINT)
+ *
+ * [실행]
+ *   sudo bpftrace killsnoop.bt        (다른 창에서  sleep 100 &  실행 후  kill %1  → 잡힘. Ctrl-C 종료)
+ *
+ * [관련] 13주차(보안). 비정상 종료·강제 kill 탐지에 응용 가능.
+ */
+
+BEGIN {
+    printf("%-16s %-6s -> %-6s %s\n", "보낸 프로세스", "PID", "대상PID", "시그널");
+}
+
+tracepoint:syscalls:sys_enter_kill {
+    printf("%-16s %-6d -> %-6d sig=%d\n", comm, pid, args.pid, args.sig);
+}

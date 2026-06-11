@@ -1,0 +1,6 @@
+Attaching 2 probes...
+소켓 생성 집계 중... (Ctrl-C 로 멈추면 결과가 나옵니다)
+
+
+@sockets[curl]: 6
+@sockets[sshd]: 12

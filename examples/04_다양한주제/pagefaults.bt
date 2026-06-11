@@ -1,0 +1,25 @@
+#!/usr/bin/env bpftrace
+/*
+ * pagefaults.bt — 어떤 프로세스가 페이지 폴트를 많이 내나 (메모리 압박 신호)
+ *
+ * [무엇을 하나]
+ *   페이지 폴트(프로세스가 아직 메모리에 없는 영역에 접근해 커널이 채워주는 사건)를
+ *   프로세스별로 세어, 메모리를 많이 요구하는 프로세스를 보여준다.
+ *
+ * [어떻게 도나]
+ *   - software:page-faults : 커널이 제공하는 소프트웨어 이벤트(페이지 폴트 카운터)
+ *   - count 1 : 1건마다 콜백.  @[comm] = count() 로 프로세스별 누적
+ *
+ * [실행]
+ *   sudo bpftrace pagefaults.bt        (다른 창에서 큰 프로그램 실행 등 → Ctrl-C 로 결과)
+ *
+ * [관련] 14주차(성능·메모리). CPU·디스크가 아닌 '메모리' 관점의 관측.
+ */
+
+BEGIN {
+    printf("페이지 폴트 집계 중... (Ctrl-C 로 멈추면 결과가 나옵니다)\n");
+}
+
+software:page-faults:1 {
+    @faults[comm] = count();   // faults = 프로세스별 페이지 폴트 수
+}

@@ -1,0 +1,24 @@
+#!/usr/bin/env bpftrace
+/*
+ * opensnoop.bt — 어떤 프로세스가 어떤 파일을 여는지 실시간으로 잡기
+ *
+ * [무엇을 하나]
+ *   파일 열기(openat) 시스템콜을 가로채, (프로세스, 여는 파일 경로)를 한 줄씩 보여준다.
+ *   "이 프로그램이 무슨 파일을 건드리나?"를 들여다보는 고전 예제.
+ *
+ * [어떻게 도나]
+ *   - tracepoint:syscalls:sys_enter_openat : 파일 열기 시스템콜 진입점 (arm64 는 open 대신 openat 사용)
+ *   - args.filename : 열려는 파일 경로
+ *
+ * [실행]
+ *   sudo bpftrace opensnoop.bt        (다른 창에서 cat /etc/hostname 등을 실행 → 잡힘. Ctrl-C 종료)
+ *   출력이 너무 많으면 특정 프로세스만:  sudo bpftrace -e 'tracepoint:syscalls:sys_enter_openat /comm=="cat"/ { printf("%s\n", str(args.filename)); }'
+ */
+
+BEGIN {
+    printf("%-16s %-6s %s\n", "프로세스", "PID", "여는 파일");
+}
+
+tracepoint:syscalls:sys_enter_openat {
+    printf("%-16s %-6d %s\n", comm, pid, str(args.filename));
+}

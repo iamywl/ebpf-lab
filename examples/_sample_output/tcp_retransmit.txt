@@ -1,0 +1,6 @@
+Attaching 2 probes...
+TCP 재전송을 지켜봅니다... (드물게 발생, Ctrl-C 로 종료)
+시각   재전송 발생
+
+
+@retransmits: 0

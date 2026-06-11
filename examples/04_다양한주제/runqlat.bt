@@ -1,0 +1,35 @@
+#!/usr/bin/env bpftrace
+/*
+ * runqlat.bt — CPU 를 기다린 시간 분포 (스케줄러 지연 히스토그램)
+ *
+ * [무엇을 하나]
+ *   프로세스가 "실행 준비됐는데 CPU 를 못 받고 대기열에서 기다린 시간"을 측정해 분포로 보여준다.
+ *   값이 크면 CPU 경쟁이 심하다는 뜻 — 시스템이 바쁜지 진단하는 핵심 지표.
+ *
+ * [어떻게 도나]
+ *   - tracepoint:sched:sched_wakeup : 깨어나 실행 대기열에 들어간 시각 기록
+ *   - tracepoint:sched:sched_switch : 실제로 CPU 를 잡은 순간, (지금 - 대기 시작)을 히스토그램에 누적
+ *
+ * [실행]
+ *   sudo bpftrace runqlat.bt        (몇 초 두었다가 Ctrl-C → 마이크로초 단위 분포)
+ *
+ * [관련] 14주차(성능·스케줄러). 실제 BCC 도구 runqlat 의 단순화 버전.
+ */
+
+BEGIN {
+    printf("스케줄러 대기시간 측정 중... (Ctrl-C 로 멈추면 히스토그램이 나옵니다)\n");
+}
+
+tracepoint:sched:sched_wakeup {
+    @wait_start[args.pid] = nsecs;   // wait_start = 대기 시작 시각
+}
+
+tracepoint:sched:sched_switch /@wait_start[args.next_pid]/ {
+    $us = (nsecs - @wait_start[args.next_pid]) / 1000;   // 나노초 → 마이크로초
+    @wait_us = hist($us);   // wait_us = CPU 대기시간(마이크로초) 분포
+    delete(@wait_start[args.next_pid]);
+}
+
+END {
+    clear(@wait_start);   // 임시 맵 정리
+}

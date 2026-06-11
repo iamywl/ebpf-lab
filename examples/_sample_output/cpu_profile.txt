@@ -1,0 +1,9 @@
+Attaching 2 probes...
+CPU 샘플링 중(초당 99회)... (Ctrl-C 로 멈추면 결과가 나옵니다)
+
+
+@on_cpu[swapper/2]: 95
+@on_cpu[yes]: 198
+@on_cpu[swapper/1]: 292
+@on_cpu[swapper/3]: 293
+@on_cpu[swapper/0]: 293

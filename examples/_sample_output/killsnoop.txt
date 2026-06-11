@@ -1,0 +1,5 @@
+Attaching 2 probes...
+보낸 프로세스 PID    -> 대상PID 시그널
+bash             33226  -> 33274  sig=15
+
+

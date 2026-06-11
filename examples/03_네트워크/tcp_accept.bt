@@ -1,0 +1,31 @@
+#!/usr/bin/env bpftrace
+/*
+ * tcp_accept.bt — 어떤 프로세스가 외부 접속을 받아들이나 (인바운드)
+ *
+ * [무엇을 하나]
+ *   서버 프로그램이 들어오는 TCP 연결을 수락(accept)할 때마다 어떤 프로세스인지 보여준다.
+ *   tcp_connect.bt 가 "나가는 연결"이라면, 이건 "들어오는 연결".
+ *
+ * [어떻게 도나]
+ *   - kretprobe:inet_csk_accept : 연결 수락 함수가 "반환할 때"(연결이 성립된 시점)에 부착
+ *   - retval 이 새로 만들어진 소켓. 여기선 단순화를 위해 수락한 프로세스만 표시.
+ *
+ * [실행]
+ *   sudo bpftrace tcp_accept.bt
+ *   다른 창 ①:  python3 -m http.server 8080      (간단한 서버 띄우기)
+ *   다른 창 ②:  curl http://127.0.0.1:8080        (접속 → 서버가 accept → 잡힘)
+ *   Ctrl-C 종료.
+ *
+ * [관련] 12주차(네트워크). 서버가 누구의 연결을 받는지 관측.
+ */
+
+BEGIN {
+    printf("%-8s %-16s %-6s %s\n", "시각", "프로세스", "PID", "이벤트");
+}
+
+kretprobe:inet_csk_accept {
+    if (retval != 0) {
+        time("%H:%M:%S ");
+        printf("%-16s %-6d 새 연결 수락(accept)\n", comm, pid);
+    }
+}

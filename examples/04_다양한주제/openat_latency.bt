@@ -1,0 +1,35 @@
+#!/usr/bin/env bpftrace
+/*
+ * openat_latency.bt — 파일 열기(openat)가 얼마나 걸리나 (지연 히스토그램)
+ *
+ * [무엇을 하나]
+ *   openat 시스템콜의 '진입~반환' 시간을 재서, 소요시간 분포를 히스토그램으로 그린다.
+ *   "느린 꼬리(tail latency)"를 눈으로 보는 성능 분석의 핵심 패턴.
+ *
+ * [어떻게 도나]
+ *   - sys_enter_openat 에서 시작 시각 저장(@start[tid] = nsecs)
+ *   - sys_exit_openat 에서 (현재시각 - 시작시각)을 계산해 hist() 에 누적
+ *   - hist() : 2의 거듭제곱 구간으로 자동 분류해 막대그래프(로그 스케일)로 보여줌
+ *
+ * [실행]
+ *   sudo bpftrace openat_latency.bt        (몇 초 두었다가 Ctrl-C → 히스토그램 출력)
+ *
+ * [관련] 14주차(성능 분석·지연 히스토그램).
+ */
+
+BEGIN {
+    printf("openat 지연 측정 중... (Ctrl-C 로 멈추면 히스토그램이 나옵니다)\n");
+}
+
+tracepoint:syscalls:sys_enter_openat {
+    @start[tid] = nsecs;       // 이 스레드의 openat 시작 시각 기록
+}
+
+tracepoint:syscalls:sys_exit_openat /@start[tid]/ {
+    @latency_ns = hist(nsecs - @start[tid]);   // latency_ns = 걸린 시간(나노초) 분포
+    delete(@start[tid]);
+}
+
+END {
+    clear(@start);             // 임시 맵 정리 (출력에서 제외)
+}

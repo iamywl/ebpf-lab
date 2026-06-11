@@ -1,0 +1,14 @@
+# 컴파일 산출물 (소스에서 다시 빌드됨)
+projects/syscall-tracer/workload
+projects/netflow-tracer/net_workload
+
+# 파이썬 캐시
+__pycache__/
+*.pyc
+
+# OS 부산물
+.DS_Store
+
+# 에디터
+.vscode/
+*.swp

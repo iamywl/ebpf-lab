@@ -1,0 +1,11 @@
+# 실행 환경
+Linux ubuntu 6.17.0-23-generic #23~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue Apr 14 15:59:10 UTC 2 aarch64 aarch64 aarch64 GNU/Linux
+
+PRETTY_NAME="Ubuntu 24.04.4 LTS"
+
+## eBPF 도구 버전
+bpftrace v0.20.2
+bcc python 0.29.1
+
+## BTF
+-r--r--r-- 1 root root 7955560 Jun 11 01:45 /sys/kernel/btf/vmlinux

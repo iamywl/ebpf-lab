@@ -1,0 +1,6 @@
+Attaching 2 probes...
+시각   프로세스     PID    이벤트
+06:41:16 python3          33495  새 연결 수락(accept)
+06:41:16 python3          33495  새 연결 수락(accept)
+
+

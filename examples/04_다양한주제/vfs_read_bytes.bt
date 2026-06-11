@@ -1,0 +1,25 @@
+#!/usr/bin/env bpftrace
+/*
+ * vfs_read_bytes.bt — 어떤 프로세스가 파일을 얼마나 많이 읽나 (바이트 합계)
+ *
+ * [무엇을 하나]
+ *   커널의 파일 읽기 함수 vfs_read 를 가로채, 프로세스별로 읽은 바이트 수를 합산한다.
+ *   디스크/파일 I/O 를 많이 하는 프로세스를 찾는 데 쓴다.
+ *
+ * [어떻게 도나]
+ *   - kprobe:vfs_read : 모든 파일 읽기가 거쳐가는 커널 함수(시스템콜보다 한 단계 안쪽)
+ *   - arg2 = 요청한 바이트 수.  @[comm] = sum(arg2) 로 프로세스별 합계
+ *
+ * [실행]
+ *   sudo bpftrace vfs_read_bytes.bt        (다른 창에서 cat 큰파일, find / 등 → Ctrl-C 로 결과)
+ *
+ * [관련] 5주차(kprobe vs tracepoint), 14주차(성능). tracepoint 가 아닌 'kprobe' 로 커널 함수에 직접 붙는 예.
+ */
+
+BEGIN {
+    printf("파일 읽기(byte) 집계 중... (Ctrl-C 로 멈추면 결과가 나옵니다)\n");
+}
+
+kprobe:vfs_read {
+    @read_bytes[comm] = sum(arg2);   // read_bytes = 프로세스별 읽은 바이트 합계
+}

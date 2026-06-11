@@ -1,0 +1,7 @@
+Attaching 2 probes...
+시각   실행한 프로세스 PID    실행 파일
+06:41:07 bash             33481  /usr/bin/ls
+06:41:07 bash             33482  
+06:41:07 bash             33483  /usr/bin/uname
+
+

@@ -1,0 +1,12 @@
+Attaching 3 probes...
+시스템콜 호출 집계 중... (Ctrl-C 로 멈추면 결과가 나옵니다)
+
+=== 프로세스별 시스템콜 호출 횟수 (적은→많은 순) ===
+
+
+@by_process[gmain]: 6
+@by_process[systemd-journal]: 8
+@by_process[timeout]: 9
+@by_process[multipathd]: 18
+@by_process[tart-guest-agen]: 43
+@by_process[bpftrace]: 65
