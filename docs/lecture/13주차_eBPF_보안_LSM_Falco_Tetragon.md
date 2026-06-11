@@ -17,6 +17,7 @@ last_updated: 2026-06-11
 런타임 보안의 핵심 질문은 **"지금 이 시스템에서 수상한 일이 벌어지고 있는가?"** 다. 공격은 대부분 커널을 거치는 행위로 드러난다 — 셸 실행, 민감 파일 열기, 예상치 못한 외부 연결, 권한 상승 시도 등. 이 모든 것이 시스템콜·커널 함수 수준에서 보인다.
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
 flowchart TB
     subgraph U["사용자 공간"]
         ATT["😈 공격자 행위\n(셸 실행·파일 접근·외부 연결)"]
@@ -28,7 +29,7 @@ flowchart TB
     end
     ATT -->|"모든 행위는 커널을 거친다"| SYS
     EBPF -->|"이벤트/경보"| SEC["보안 도구\n(탐지·대응)"]
-    style EBPF fill:#d0e8f9
+    style EBPF fill:#ffffff
 ```
 
 eBPF 가 보안 센서로 적합한 이유:
@@ -49,12 +50,13 @@ eBPF 가 보안 센서로 적합한 이유:
 **seccomp(secure computing)** 는 프로세스가 호출할 수 있는 시스템콜을 제한하는 오래된 리눅스 기능이다. **seccomp-bpf** 는 여기에 (고전) BPF 필터를 붙여, **"이 프로세스는 이 시스템콜만 허용"** 같은 규칙을 건다. 컨테이너 런타임이 컨테이너의 공격 표면을 줄일 때 흔히 쓴다.
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
 flowchart LR
     P["프로세스의\n시스템콜 호출"] --> F{"seccomp-bpf 필터"}
     F -->|허용 목록에 있음| OK["ALLOW (정상 실행)"]
     F -->|목록에 없음| NO["차단: ERRNO / KILL"]
-    style F fill:#fce8c0
-    style NO fill:#f9d0d0
+    style F fill:#ffffff
+    style NO fill:#ffffff
 ```
 
 seccomp-bpf 의 성격:
@@ -74,12 +76,13 @@ seccomp-bpf 의 성격:
 **LSM BPF(BPF LSM)** 는 이 LSM 훅에 **eBPF 프로그램**을 달 수 있게 한 기능(커널 5.7+)이다. eBPF 가 보안 결정을 내려 **0(허용) 또는 음수 에러(거부)** 를 반환한다.
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
 flowchart LR
     ACT["민감한 커널 동작\n(예: file_open)"] --> HOOK{"LSM 훅\n+ eBPF 프로그램"}
     HOOK -->|"return 0"| ALLOW["허용"]
     HOOK -->|"return -EPERM"| DENY["거부 🚫"]
-    style HOOK fill:#d0e8f9
-    style DENY fill:#f9d0d0
+    style HOOK fill:#ffffff
+    style DENY fill:#ffffff
 ```
 
 seccomp 와 LSM BPF 의 결정적 차이:
@@ -101,11 +104,12 @@ seccomp 와 LSM BPF 의 결정적 차이:
 여기서 이번 주의 가장 중요한 개념을 못 박자.
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
 flowchart LR
     EV["수상한 행위 발생\n(예: 셸 실행)"] --> DET["🔍 탐지(detection)\n'일어났다'고 알림\n→ 경보·로그"]
     EV --> ENF["🛡 강제(enforcement)\n행위 자체를 막음\n→ 프로세스 종료·연결 차단"]
-    style DET fill:#fff3c4
-    style ENF fill:#d0f9d0
+    style DET fill:#ffffff
+    style ENF fill:#ffffff
 ```
 
 | 구분 | 탐지(Detection) | 강제(Enforcement) |
@@ -125,12 +129,13 @@ flowchart LR
 **Falco** 는 CNCF 의 졸업(Graduated) 프로젝트로, 런타임 위협 **탐지**에 널리 쓰이는 오픈소스다. 시스템콜·커널 이벤트를 수집해 **룰 엔진**으로 평가하고, 룰에 걸리면 **경보(alert)** 를 낸다. 성격상 "관측·탐지" 중심이다.
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
 flowchart LR
     K["커널 이벤트\n(시스템콜 등, eBPF 수집)"] --> ENG["Falco 룰 엔진"]
     RULES["탐지 룰\n(YAML)"] --> ENG
     ENG -->|룰 매칭| ALERT["🚨 경보\n(stdout·로그·Slack·SIEM 등)"]
-    style ENG fill:#fff3c4
-    style ALERT fill:#f9e0c0
+    style ENG fill:#ffffff
+    style ALERT fill:#ffffff
 ```
 
 전형적인 Falco 룰의 형태(개념용):
@@ -159,12 +164,13 @@ Falco 가 잡아내는 전형적 위협 패턴:
 **Tetragon** 은 **Cilium 의 하위 프로젝트**(CNCF)로, eBPF 기반 **보안 관측(observability)** 에 더해 **실시간 강제(enforcement)** 까지 할 수 있는 것이 특징이다. 즉 의심 행위를 관측만 하는 게 아니라, 커널 안에서 **프로세스를 종료하거나 연결을 차단**하는 식의 조치를 취할 수 있다.
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
 flowchart TB
     K["커널 훅 (eBPF)\n프로세스·파일·네트워크"] --> TP["TracingPolicy\n(관측 대상 + 행동 정의)"]
     TP --> OBS["📊 관측: 이벤트 스트림\n(프로세스 계보 포함)"]
     TP --> ENF["🛡 강제: 커널 내 즉시 조치\n(예: SIGKILL, 연결 차단)"]
-    style ENF fill:#d0f9d0
-    style OBS fill:#fff3c4
+    style ENF fill:#ffffff
+    style OBS fill:#ffffff
 ```
 
 Tetragon 의 성격:
@@ -186,6 +192,7 @@ Tetragon 의 성격:
 | **Tetragon** | 커널 훅(eBPF) | **관측 + 강제** | 이벤트 + 인커널 조치 | Cilium 하위(CNCF), 강제 가능 |
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
 flowchart LR
     subgraph DETECT["🔍 탐지 위주"]
         FAL["Falco\n(경보)"]
@@ -196,8 +203,8 @@ flowchart LR
         TET["Tetragon"]
     end
     FAL -.->|신뢰 쌓이면 차단으로| TET
-    style DETECT fill:#fff3c4
-    style ENFORCE fill:#d0f9d0
+    style DETECT fill:#ffffff
+    style ENFORCE fill:#ffffff
 ```
 
 > 주의: 도구들의 세부 기능·성능은 버전과 환경에 따라 다르다. 시험·실무에서는 "Falco = 탐지 중심, Tetragon = 관측+강제, LSM BPF = 커널 보안 결정, seccomp = 정적 시스템콜 게이트"라는 **역할 구분**을 정확히 잡는 것이 핵심이다.
@@ -209,12 +216,13 @@ flowchart LR
 우리 10주차 실습②(netflow-tracer)는 `tcp_v4_connect` 에 kprobe 를 걸어 **"어떤 프로세스가 어디로 TCP 연결을 하나"** 를 관측했다. 이건 사실 보안 탐지의 **기본 빌딩블록**이다.
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
 flowchart LR
     OUR["우리 실습②\nkprobe tcp_v4_connect\n→ 프로세스별 연결 관측"] --> STEP1["여기에 '허용 목적지 목록'을 더하면..."]
     STEP1 --> DET["🔍 탐지: 목록 밖 IP 로 연결 시 경보\n(= Falco 가 하는 일의 축소판)"]
     STEP1 --> ENF["🛡 강제: 목록 밖 연결을 차단\n(= Tetragon/LSM 이 하는 일의 축소판)"]
-    style DET fill:#fff3c4
-    style ENF fill:#d0f9d0
+    style DET fill:#ffffff
+    style ENF fill:#ffffff
 ```
 
 - **탐지로 키우기**: 실습②의 출력에 "예상 목적지 화이트리스트"를 더하면, 목록 밖 IP 로의 연결을 **경보**할 수 있다. 이것이 Falco 류 "예상치 못한 네트워크 연결" 탐지의 본질이다.

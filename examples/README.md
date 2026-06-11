@@ -59,7 +59,9 @@ sudo bpftrace 01_기본동작/hello.bt
 # 띄워둔 채 다른 창에서 ls, date 를 쳐보세요
 ```
 
-실제 출력:
+실제 실행 화면(VM에서 캡처):
+
+![hello.bt 실제 실행 화면](../docs/lecture/images/shot_hello.png)
 
 ```text
 eBPF 시작! 새 프로그램 실행을 지켜봅니다. (다른 창에서 명령을 쳐보세요, Ctrl-C 로 종료)
@@ -155,6 +157,8 @@ TCP 재전송을 지켜봅니다... (드물게 발생, Ctrl-C 로 종료)
 eBPF 는 시스템콜·네트워크 말고도 **성능·메모리·스케줄러**까지 들여다봅니다.
 
 **파일 열기 지연 분포** — [openat_latency.bt](04_다양한주제/openat_latency.bt) (히스토그램 = 성능 분석의 핵심):
+
+![openat_latency.bt 실제 실행 화면 — 지연 히스토그램](../docs/lecture/images/shot_openat_latency.png)
 
 ```text
 @latency_ns:

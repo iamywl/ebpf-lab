@@ -17,6 +17,7 @@ last_updated: 2026-06-11
 웹 요청 하나가 도착하면, 그 패킷은 여러 단계를 거쳐 애플리케이션에 닿는다. 핵심은 **"위로 올라갈수록 정보는 풍부해지지만, 처리 비용도 커진다"** 는 점이다.
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
 flowchart TB
     WIRE["🌐 네트워크 (랜선/무선)"] --> NIC["NIC 하드웨어"]
     NIC --> DRV["드라이버 / RX 큐"]
@@ -26,9 +27,9 @@ flowchart TB
     TCI --> STACK["커널 네트워크 스택\n(IP/TCP 처리, netfilter)"]
     STACK -->|"⬅ socket/cgroup 훅"| SOCK{{"socket eBPF"}}
     SOCK --> APP["📦 애플리케이션 소켓"]
-    style XDP fill:#f9d0d0
-    style TCI fill:#fce8c0
-    style SOCK fill:#d0e8f9
+    style XDP fill:#ffffff
+    style TCI fill:#ffffff
+    style SOCK fill:#ffffff
 ```
 
 - **XDP 훅**: 패킷이 막 들어와 아직 `sk_buff`(커널의 무거운 패킷 표현)가 만들어지기 **전**, 드라이버 레벨에서 동작한다. 가장 빠르지만, 다룰 수 있는 정보는 원시 패킷(raw frame)뿐이다.
@@ -52,14 +53,15 @@ flowchart TB
 | `XDP_ABORTED` | 오류(추적용) | 디버깅 |
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
 flowchart LR
     P["들어온 패킷"] --> X{"XDP eBPF\n패킷 검사"}
     X -->|악성/불필요| D["XDP_DROP\n(버림)"]
     X -->|정상| PASS["XDP_PASS\n(스택으로)"]
     X -->|되쏘기| TX["XDP_TX"]
     X -->|딴 데로| R["XDP_REDIRECT"]
-    style D fill:#f9d0d0
-    style PASS fill:#d0f9d0
+    style D fill:#ffffff
+    style PASS fill:#ffffff
 ```
 
 XDP 가 빠른 이유는 명확하다. **악성 트래픽을 `sk_buff` 생성 같은 비싼 작업 이전에 버리기** 때문이다. 같은 패킷을 iptables 로 막으면 이미 스택 깊숙이 들어온 뒤라 비용이 훨씬 크다. 그래서 대규모 인프라의 **DDoS 방어·L4 로드밸런서**가 XDP 로 구현되곤 한다.
@@ -96,6 +98,7 @@ XDP 가 "들어오는 패킷의 최전선"이라면, **tc(traffic control) eBPF*
 | 대표 용도 | DDoS 방어, 고속 LB | 정책 적용, 리다이렉트, 가공, 모니터링 |
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
 flowchart LR
     subgraph IN["수신(ingress)"]
         I1["패킷 도착"] -->|XDP| I2["tc ingress eBPF"] --> I3["스택"]
@@ -103,8 +106,8 @@ flowchart LR
     subgraph OUT["송신(egress)"]
         O1["앱이 보냄"] --> O2["tc egress eBPF"] --> O3["NIC 로"]
     end
-    style I2 fill:#fce8c0
-    style O2 fill:#fce8c0
+    style I2 fill:#ffffff
+    style O2 fill:#ffffff
 ```
 
 > 실무에서 XDP 와 tc 는 **함께** 쓰인다: XDP 로 명백한 쓰레기 트래픽을 1차로 빠르게 거르고, tc 로 더 정교한 정책·가공을 한다.
@@ -127,6 +130,7 @@ eBPF 훅은 스택 위쪽에도 있다. 이들은 패킷 단위라기보다 **�
 지금까지의 훅(XDP·tc·소켓·cgroup)을 한데 엮어 **쿠버네티스 네트워킹**을 통째로 구현한 대표 프로젝트가 **Cilium** 이다. Cilium 은 CNCF 의 졸업(Graduated) 프로젝트로, 쿠버네티스의 **CNI(Container Network Interface) 플러그인**으로 널리 쓰인다.
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
 flowchart TB
     subgraph NODE["🖥 쿠버네티스 노드"]
         direction TB
@@ -138,7 +142,7 @@ flowchart TB
         DP --> OBS["관측 데이터 → Hubble"]
     end
     DP --> OUT["🌐 다른 노드 / 외부"]
-    style DP fill:#d0e8f9
+    style DP fill:#ffffff
 ```
 
 Cilium 이 노드에서 하는 일을, **일반적으로 알려진 수준**에서 정리하면 다음과 같다.
@@ -163,12 +167,13 @@ Cilium 이 노드에서 하는 일을, **일반적으로 알려진 수준**에�
 **Hubble** 은 Cilium 의 데이터패스가 보는 흐름(flow)을 활용한 **관측(observability) 계층**이다. "어떤 파드가 어떤 파드로, 어떤 포트로, 정책상 허용/거부되었는지"를 흐름 단위로 보여 준다.
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
 flowchart LR
     DP["Cilium eBPF 데이터패스"] -->|흐름 이벤트| H["Hubble"]
     H --> CLI["hubble CLI\n(흐름 조회)"]
     H --> UI["Hubble UI\n(서비스 의존성 그래프)"]
     H --> MET["메트릭 (Prometheus 등)"]
-    style H fill:#d0f9e0
+    style H fill:#ffffff
 ```
 
 Hubble 이 답하는 전형적 질문: "지금 정책에 막혀 거부(deny)된 연결이 있나?", "frontend → backend 트래픽이 실제로 흐르나?", "어떤 서비스가 외부로 나가나?"
@@ -180,6 +185,7 @@ Hubble 이 답하는 전형적 질문: "지금 정책에 막혀 거부(deny)된 
 ## 7. 큰 그림: 우리 실습②와 어떻게 이어지나
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
 flowchart LR
     subgraph OURS["우리 실습② (netflow-tracer)"]
         K["kprobe: tcp_v4_connect"] --> E["프로세스별\nTCP 연결 추적(관측)"]
@@ -192,7 +198,7 @@ flowchart LR
     end
     E -.->|"같은 질문을 더 크게"| HUB
     K -.->|"관측 → 제어로 확장"| CIL
-    style OURS fill:#fff3c4
+    style OURS fill:#ffffff
 ```
 
 - 우리가 한 일: 한 머신에서 **"누가 어디로 연결하나"** 를 kprobe 로 **관측**.
