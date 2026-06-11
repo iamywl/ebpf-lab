@@ -59,7 +59,7 @@ sudo bpftrace 01_기본동작/hello.bt
 # 띄워둔 채 다른 창에서 ls, date 를 쳐보세요
 ```
 
-실제 출력을 터미널 이미지로 렌더링(스크린샷 아님, 내용은 실제 출력):
+실제 터미널에서 실행한 화면 캡처:
 
 ![hello.bt 실제 실행 화면](../docs/lecture/images/shot_hello.png)
 

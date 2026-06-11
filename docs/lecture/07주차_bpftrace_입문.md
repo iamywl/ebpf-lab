@@ -260,9 +260,9 @@ interval:s:1 { print(@conn); clear(@conn); }'
 
 ---
 
-### 📸 실제 실행 출력 (터미널 이미지로 렌더링)
+### 📸 실제 실행 화면 (터미널 스크린샷)
 
-> 아래는 이 강의 환경(Ubuntu 24.04 / 커널 6.17 / aarch64)에서 **실제로 bpftrace 를 돌려 얻은 출력**을, 보기 좋게 터미널 이미지로 렌더링한 것입니다. (화면 스크린샷이 아니라 실제 출력 텍스트의 시각화 — 원본: `_sample_output/`)
+> 아래는 이 강의 환경(Ubuntu 24.04 / 커널 6.17 / aarch64)에서 **실제 터미널을 열어 bpftrace 를 실행한 화면을 그대로 캡처(screencapture)** 한 것입니다.
 
 ![hello.bt — 새 프로그램이 실행될 때마다 한 줄 출력](images/shot_hello.png)
 
