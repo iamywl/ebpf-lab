@@ -85,6 +85,7 @@ last_updated: 2026-06-12
 
 > eBPF 로 **운영체제 기초(OSTEP)** 를 함께 배운다. 교재 [OSTEP](https://pages.cs.wisc.edu/~remzi/OSTEP/Korean/)의 개념을
 > **"📖 OSTEP에서는 … → 🔬 eBPF로는(실측) …"** 형식으로, 돌아가는 커널을 직접 관찰하며 익힌다. → **[운영체제 트랙 전체 보기](os/README.md)**
+> · [KAIST OSTEP 슬라이드 ↔ eBPF 동행 가이드](os/OSTEP_슬라이드_eBPF_동행가이드.md)(35개 장 장별 매핑)
 
 | 부 | 모듈 | OSTEP 장 | eBPF 실측 |
 |:---|:---|:---|:---|

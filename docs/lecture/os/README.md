@@ -9,6 +9,9 @@ last_updated: 2026-06-12
 > 모든 스크린샷은 실습 VM(Ubuntu 24.04 / 커널 6.17)에서 **실제 터미널을 캡처**한 것이다(생성·합성 아님).
 > 참고 교재: [OSTEP 한국어판](https://pages.cs.wisc.edu/~remzi/OSTEP/Korean/) · 숙제: [ostep-homework](https://github.com/remzi-arpacidusseau/ostep-homework)
 
+> 📑 **[KAIST OSTEP 슬라이드 ↔ eBPF 동행 가이드](OSTEP_슬라이드_eBPF_동행가이드.md)** — [KAIST 강의 슬라이드](https://oslab.kaist.ac.kr/ostepslides/) 35개 장을
+> 우리 eBPF 실습과 **장별로 짝지은 표**. "슬라이드로 개념 → eBPF로 실측"을 한 장씩 따라간다.
+
 ---
 
 ## 이 트랙을 왜 보나
