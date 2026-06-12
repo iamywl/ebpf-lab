@@ -125,6 +125,84 @@ sudo bpftrace -e 'tracepoint:syscalls:sys_enter_clone { @[comm] = count(); }'
 
 ---
 
+## 💻 코드로 보기 — 이 관찰을 하는 eBPF 코드
+
+> 위에서 본 OS 개념을 eBPF로 어떻게 잡는지, 실제 도구 코드(`labs/01_프로세스/proc_audit.py`)를 직접 본다. `execsnoop` 가 하는 일을 직접 만든 축소판으로, "프로세스가 태어나는 순간(execve)"을 한 줄씩 찍는다.
+
+### ① 커널에서 도는 부분 (eBPF C)
+
+`proc_audit.py` 의 `BPF_TEXT` 안에 있는 C 코드다.
+
+```c
+struct event_t {
+    u32 pid;
+    u32 uid;
+    char comm[16];     // execve 를 호출한(부모) 프로세스 이름
+    char fname[128];   // 실행하려는 파일 경로
+};
+BPF_PERF_OUTPUT(events);
+
+TRACEPOINT_PROBE(syscalls, sys_enter_execve) {
+    struct event_t e = {};
+    e.pid = bpf_get_current_pid_tgid() >> 32;
+    e.uid = bpf_get_current_uid_gid() & 0xffffffff;
+    bpf_get_current_comm(&e.comm, sizeof(e.comm));
+    // execve 의 filename 은 사용자 공간 문자열 → bpf_probe_read_user_str 로 안전 복사
+    bpf_probe_read_user_str(&e.fname, sizeof(e.fname), args->filename);
+    events.perf_submit(args, &e, sizeof(e));
+    return 0;
+}
+```
+
+- `BPF_PERF_OUTPUT(events);` — 이 줄은 커널→사용자 공간으로 이벤트를 한 건씩 흘려보내는 **perf 출력 채널**을 만든다. 집계가 아니라 "사건 하나하나"를 그대로 올려 보낼 때 쓴다.
+- `TRACEPOINT_PROBE(syscalls, sys_enter_execve)` — 이 줄이 **부착 지점**이다. 본문에서 본 "디스크의 프로그램이 메모리에 올라와 프로세스가 되는" 그 `execve` 시스템콜의 **진입** 순간에 이 코드가 실행된다. 즉 OSTEP의 `exec()` 개념을 잡는 바로 그 지점이다.
+- `e.pid = bpf_get_current_pid_tgid() >> 32;` — 이 줄은 **현재 프로세스의 PID**를 얻는다. 헬퍼가 돌려주는 64비트 값의 상위 32비트가 PID(=tgid)다.
+- `e.uid = bpf_get_current_uid_gid() & 0xffffffff;` — 이 줄은 **누구의 권한으로** 실행됐는지(UID)를 얻는다. "방금 무엇이, 누구 권한으로 실행됐나"라는 보안 감사의 핵심.
+- `bpf_get_current_comm(&e.comm, sizeof(e.comm));` — 이 줄은 `execve` 를 **호출한 부모 프로세스 이름**(예: `bash`)을 가져온다. 본문 다이어그램의 `bash → execve("/bin/ls")` 에서 바로 이 `bash` 다.
+- `bpf_probe_read_user_str(&e.fname, sizeof(e.fname), args->filename);` — 이 줄은 **실행하려는 파일 경로**를 가져온다. `args->filename` 은 사용자 공간 포인터라 커널이 직접 못 읽으므로, `bpf_probe_read_user_str` 로 안전하게 복사한다.
+- `events.perf_submit(args, &e, sizeof(e));` — 이 줄이 채운 이벤트를 사용자 공간으로 **올려 보낸다**.
+
+### ② 사용자 공간 부분 (Python)
+
+같은 파일 `main()` 의 BPF 로드와 perf 폴링 부분이다.
+
+```python
+bpf = BPF(text=BPF_TEXT)
+print(f"{'시각':<10} {'PID':>7} {'UID':>6} {'프로세스':<16} 실행파일", file=sys.stderr)
+
+def handle(_cpu, data, _size):
+    e = bpf["events"].event(data)
+    comm = e.comm.decode("utf-8", "replace")
+    if args.comm and args.comm != comm:
+        return
+    fname = e.fname.decode("utf-8", "replace")
+    print(f"{time.strftime('%H:%M:%S'):<10} {e.pid:>7} {e.uid:>6} {comm:<16} {fname}")
+
+bpf["events"].open_perf_buffer(handle)
+start = time.time()
+try:
+    while True:
+        bpf.perf_buffer_poll(timeout=200)
+        if args.duration and (time.time() - start) >= args.duration:
+            break
+except KeyboardInterrupt:
+    pass
+```
+
+- `bpf = BPF(text=BPF_TEXT)` — 이 줄이 위의 C 코드를 **컴파일·검증·커널 로드**하고 트레이스포인트에 부착한다.
+- `e = bpf["events"].event(data)` — 커널이 올려보낸 한 건을 `struct event_t` 로 풀어, `e.pid`/`e.uid`/`e.comm`/`e.fname` 으로 읽는다.
+- `bpf["events"].open_perf_buffer(handle)` + `bpf.perf_buffer_poll(...)` — perf 출력 채널을 열고 **계속 폴링**하며 이벤트가 올라올 때마다 `handle` 을 부른다. execve 한 번 = 출력 한 줄이 되는 이유.
+
+### 직접 실행
+
+```bash
+sudo python3 labs/01_프로세스/proc_audit.py --duration 10
+```
+
+기대 결과: 10초 동안 시스템에서 새로 실행된 모든 프로그램이 `시각 / PID / UID / 부모프로세스 / 실행파일` 한 줄씩 찍힌다(다른 창에서 `ls`, `date` 등을 실행하면 즉시 나타남).
+
+---
+
 ## 💡 핵심 요약 — OSTEP ↔ eBPF 대조표
 
 | 주제 | OSTEP(이론·시뮬레이션) | eBPF(실측) |

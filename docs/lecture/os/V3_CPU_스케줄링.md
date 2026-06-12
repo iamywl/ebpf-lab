@@ -123,6 +123,84 @@ sudo bpftrace -e 'tracepoint:sched:sched_switch { @[args.prev_comm] = count(); }
 
 ---
 
+## 💻 코드로 보기 — 이 관찰을 하는 eBPF 코드
+
+> 위에서 본 OS 개념을 eBPF로 어떻게 잡는지, 실제 도구 코드(`labs/02_스케줄러/runq_latency.py`)를 직접 본다. `runqlat` 가 측정하는 **런큐 지연**(깨어난 뒤 CPU를 받기까지 기다린 시간 = OSTEP scheduler.py 의 "Ready 큐 대기 시간")을 직접 구현한 축소판이다.
+
+### ① 커널에서 도는 부분 (eBPF C)
+
+`runq_latency.py` 의 `BPF_TEXT` 안 C 코드다.
+
+```c
+BPF_HASH(wake_ts, u32, u64);    // pid -> 깨어난 시각(ns)
+BPF_HISTOGRAM(dist);            // 대기시간(us) 로그2 분포
+
+static inline void mark_wakeup(u32 pid) {
+    u64 ts = bpf_ktime_get_ns();
+    wake_ts.update(&pid, &ts);
+}
+
+TRACEPOINT_PROBE(sched, sched_wakeup) {
+    mark_wakeup(args->pid);
+    return 0;
+}
+TRACEPOINT_PROBE(sched, sched_wakeup_new) {
+    mark_wakeup(args->pid);
+    return 0;
+}
+
+TRACEPOINT_PROBE(sched, sched_switch) {
+    u32 next = args->next_pid;
+    u64 *tsp = wake_ts.lookup(&next);
+    if (tsp) {
+        u64 delta_us = (bpf_ktime_get_ns() - *tsp) / 1000;
+        dist.increment(bpf_log2l(delta_us));
+        wake_ts.delete(&next);
+    }
+    return 0;
+}
+```
+
+- `BPF_HASH(wake_ts, u32, u64);` — 이 줄은 **(PID → 깨어난 시각)** 을 보관하는 맵이다. "깨어난 순간"과 "CPU를 잡은 순간"을 짝지으려면 그 사이에 시각을 저장해야 한다.
+- `BPF_HISTOGRAM(dist);` — 이 줄이 본문 캡처의 그 **런큐 지연 히스토그램**을 채울 맵이다.
+- `TRACEPOINT_PROBE(sched, sched_wakeup)` / `sched_wakeup_new` — 이 두 줄이 태스크가 **Ready 상태로 진입(깨어남)** 하는 순간의 부착 지점이다. 본문 다이어그램의 `프로세스가 깨어남(Ready 진입)` 노드. `_new` 는 갓 생성된 태스크용이다.
+- `mark_wakeup(args->pid)` 안의 `bpf_ktime_get_ns()` — 깨어난 시각을 나노초로 찍어 그 PID 키로 저장한다. **대기 시간 측정의 시작점**.
+- `TRACEPOINT_PROBE(sched, sched_switch)` — 이 줄이 **문맥 교환**(다음 태스크가 실제 CPU를 잡는 순간)의 부착 지점이다. V2에서 본 "타이머 인터럽트 → 문맥 교환"이 실제로 일어나는 그곳.
+- `u32 next = args->next_pid; ... wake_ts.lookup(&next);` — 이번에 **CPU를 받은 태스크**(`next_pid`)가 아까 깨어났던 적이 있는지 맵에서 찾는다.
+- `u64 delta_us = (bpf_ktime_get_ns() - *tsp) / 1000; dist.increment(bpf_log2l(delta_us));` — 이 줄이 핵심이다. (CPU 잡은 시각 − 깨어난 시각) = **런큐에서 기다린 시간**을 계산해 히스토그램에 넣는다. 이 값이 곧 OSTEP의 응답/대기 시간이고, CPU 경쟁이 심할수록 커진다.
+
+### ② 사용자 공간 부분 (Python)
+
+같은 파일 `main()` 부분이다.
+
+```python
+bpf = BPF(text=BPF_TEXT)
+print(f"스케줄러 대기시간 측정 {args.duration}초... (다른 창에서 'yes > /dev/null' 로 부하)",
+      file=sys.stderr)
+try:
+    time.sleep(args.duration)
+except KeyboardInterrupt:
+    pass
+
+print("\n=== CPU 실행 대기시간 분포 (단위: 마이크로초) ===")
+bpf["dist"].print_log2_hist("usecs")
+```
+
+- `bpf = BPF(text=BPF_TEXT)` — 위 C 코드를 로드하고 세 개의 sched 트레이스포인트에 부착한다.
+- `time.sleep(args.duration)` — 측정 동안 파이썬은 잠만 잔다. wakeup/switch 짝짓기와 집계는 **전부 커널 안에서** 일어난다.
+- `bpf["dist"].print_log2_hist("usecs")` — 커널이 모은 런큐 지연 히스토그램을 읽어 본문 캡처와 같은 막대그래프로 찍는다.
+
+### 직접 실행
+
+```bash
+sudo python3 labs/02_스케줄러/runq_latency.py --duration 5
+# 부하를 주려면 다른 창에서:  yes > /dev/null
+```
+
+기대 결과: 5초간의 런큐 대기 시간 분포가 출력된다. 한가하면 대부분 수 µs(즉시 실행)에 몰리고, `yes` 로 CPU 경쟁을 주면 분포가 오른쪽(긴 대기)으로 번진다 — OSTEP의 "Ready 큐 대기 시간"이 커지는 모습.
+
+---
+
 ## 💡 핵심 요약 — OSTEP ↔ eBPF 대조표
 
 | 주제 | OSTEP(이론·시뮬레이션) | eBPF(실측) |

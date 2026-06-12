@@ -383,6 +383,149 @@ flowchart LR
 
 ---
 
+## 💻 코드로 보기 — BCC 프로그램 전문
+
+이번 주의 개념(C 커널 코드 + Python 로더, 맵 vs perf 이벤트)을 **실제 파일** 두 개로 확인합니다. `hello_bcc.py` 는 가장 작은 BCC 스크립트이고, `open_audit.py`(labs)는 perf 이벤트와 진입·반환 짝짓기를 모두 보여줍니다.
+
+### hello_bcc.py — 가장 작은 BCC (C 문자열 + 로드 + trace_fields)
+
+```python
+#!/usr/bin/env python3
+"""hello_bcc.py — 가장 단순한 eBPF 프로그램 (BCC / Python 버전).
+
+[무엇을 하나]
+    bpftrace 버전(hello.bt)과 똑같이 새 프로그램 실행을 감지하지만,
+    이번엔 'C 로 쓴 eBPF 코드'를 'Python' 이 커널에 올리는 방식을 보여준다.
+    eBPF 의 두 얼굴(커널에서 도는 C + 사용자공간에서 제어하는 Python)을 한 파일에서 본다.
+
+[구조]
+    1) bpf_text : 커널 안에서 돌 C 코드 (execve 진입점에 붙음)
+    2) BPF(text=...) : Python 이 그 C 를 컴파일해 커널에 로드·부착
+    3) trace_print() : 커널이 보낸 메시지를 Python 이 받아 출력
+
+[실행]
+    sudo python3 hello_bcc.py        (Ctrl-C 로 종료)
+    다른 창에서 ls / date 등을 실행하면 줄이 찍힌다.
+"""
+
+from bcc import BPF
+
+# ── 커널 안에서 실행될 eBPF 프로그램 (C) ─────────────────────────────
+# 참고: bpf_trace_printk 의 형식 문자열은 ASCII 만 허용한다(한글 ✗).
+# 그래서 커널 쪽은 ASCII 신호만 보내고, 한글 출력은 Python 쪽에서 한다.
+bpf_text = r"""
+TRACEPOINT_PROBE(syscalls, sys_enter_execve) {
+    // 이 블록은 누군가 execve 를 호출하는 "커널 안"에서 실행된다.
+    bpf_trace_printk("exec\\n");
+    return 0;
+}
+"""
+
+# ── Python(사용자공간): C 를 컴파일해 커널에 로드·부착 ─────────────────
+print("eBPF 로드 중... (다른 창에서 명령을 쳐보세요, Ctrl-C 로 종료)")
+bpf = BPF(text=bpf_text)
+
+# ── 커널이 신호를 보낼 때마다 Python 이 받아 한글로 출력 ────────────────
+# trace_fields() 는 (프로세스이름, pid, cpu, flags, 타임스탬프, 메시지) 를 돌려준다.
+try:
+    while True:
+        task, pid, cpu, flags, ts, msg = bpf.trace_fields()
+        print(f"안녕! PID {pid} ({task.decode('utf-8', 'replace')}) 가 새 프로그램을 실행했어요")
+except KeyboardInterrupt:
+    print("\neBPF 종료. 안녕히 가세요!")
+```
+
+- **커널 C 문자열** `bpf_text`: `TRACEPOINT_PROBE(syscalls, sys_enter_execve)` 로 execve 진입점에 자동 부착됩니다(4절의 명명규칙). 안에서는 `bpf_trace_printk("exec\n")` 로 ASCII 신호만 보냅니다 — `bpf_trace_printk` 의 형식 문자열은 한글을 못 받기 때문입니다.
+- **`BPF(text=bpf_text)`**: 이 한 줄이 C 를 런타임 clang 으로 컴파일 → `bpf()` 로 로드 → 트레이스포인트에 부착까지 끝냅니다. 끝나는 순간 이미 추적이 돕니다.
+- **`trace_fields()` 출력**: 커널이 보낸 메시지를 `(task, pid, cpu, flags, ts, msg)` 튜플로 받아, 한글 출력은 **Python 쪽**에서 합니다. "커널은 신호만, 표현은 사용자 공간" 이라는 역할 분리가 한눈에 보입니다. (이 예제는 맵을 안 쓰는 `trace_pipe` 방식이고, 다음 `open_audit.py` 에서 맵·perf 로 넘어갑니다.)
+
+### open_audit.py (labs) — perf 이벤트 + 진입/반환 짝짓기
+
+`labs/05_파일IO/open_audit.py` 는 openat 의 **진입에서 경로·플래그를 잡고, 반환에서 결과 fd 를 짝지어** 한 줄로 내보내는 감사기입니다. 7주차 `openat_latency.bt` 의 짝짓기 패턴이 여기서는 `BPF_HASH`(진행 중 정보 보관) + `BPF_PERF_OUTPUT`(완성된 이벤트 스트리밍)으로 구현됩니다.
+
+**커널 C — `BPF_TEXT` 의 enter/exit_openat 짝짓기 + perf_submit:**
+
+```python
+BPF_TEXT = r"""
+#include <uapi/linux/ptrace.h>
+
+struct val_t { char fname[128]; int flags; };
+BPF_HASH(active, u64, struct val_t);   // pid_tgid -> 진행 중 open 정보
+
+struct event_t {
+    u32 pid;
+    int flags;
+    int ret;       // 결과 fd (음수면 실패)
+    char comm[16];
+    char fname[128];
+};
+BPF_PERF_OUTPUT(events);
+
+TRACEPOINT_PROBE(syscalls, sys_enter_openat) {
+    struct val_t v = {};
+    v.flags = args->flags;
+    bpf_probe_read_user_str(&v.fname, sizeof(v.fname), args->filename);
+    u64 id = bpf_get_current_pid_tgid();
+    active.update(&id, &v);
+    return 0;
+}
+
+TRACEPOINT_PROBE(syscalls, sys_exit_openat) {
+    u64 id = bpf_get_current_pid_tgid();
+    struct val_t *vp = active.lookup(&id);
+    if (!vp) {
+        return 0;
+    }
+    struct event_t e = {};
+    e.pid = id >> 32;
+    e.flags = vp->flags;
+    e.ret = args->ret;
+    bpf_get_current_comm(&e.comm, sizeof(e.comm));
+    __builtin_memcpy(&e.fname, vp->fname, sizeof(e.fname));
+    events.perf_submit(args, &e, sizeof(e));
+    active.delete(&id);
+    return 0;
+}
+"""
+```
+
+- **진입(`sys_enter_openat`)**: 경로(`args->filename` → `bpf_probe_read_user_str`)와 플래그를 `struct val_t` 에 담아, `pid_tgid` 를 키로 **`active` 맵에 저장**합니다. 아직 결과(fd)를 모르니 맵에 임시 보관하는 것입니다.
+- **반환(`sys_exit_openat`)**: 같은 `pid_tgid` 로 `active.lookup` 해 **진입 때 저장한 정보를 되찾고**(`if (!vp) return 0` 으로 짝이 없으면 무시), 결과 fd(`args->ret`)·`comm` 을 합쳐 `event_t` 를 완성합니다. `events.perf_submit(args, &e, ...)` 로 **완성된 한 건을 즉시 사용자 공간으로** 보내고, `active.delete(&id)` 로 짝을 지웁니다.
+- 즉 **맵(`BPF_HASH active`)은 진입·반환을 잇는 임시 저장소**, **perf(`BPF_PERF_OUTPUT events`)는 완성된 이벤트의 스트리밍 채널**입니다. 7주차 `openat_latency.bt` 의 `@start[tid]` 와 같은 발상이지만, 여기서는 단순 집계가 아니라 개별 이벤트를 통째로 내보냅니다(5절의 맵 vs perf 대비).
+
+**Python — perf 폴링·출력:**
+
+```python
+    bpf = BPF(text=BPF_TEXT)
+    print(f"{'PID':>7} {'프로세스':<14} {'모드':>4} {'fd':>5}  파일", file=sys.stderr)
+    print("-" * 70, file=sys.stderr)
+
+    def handle(_cpu, data, _size):
+        e = bpf["events"].event(data)
+        comm = e.comm.decode("utf-8", "replace")
+        if args.comm and args.comm != comm:
+            return
+        fname = e.fname.decode("utf-8", "replace")
+        fd = e.ret if e.ret >= 0 else f"{e.ret}(실패)"
+        print(f"{e.pid:>7} {comm:<14} {flag_str(e.flags):>4} {str(fd):>5}  {fname}")
+
+    bpf["events"].open_perf_buffer(handle)
+    start = time.time()
+    try:
+        while True:
+            bpf.perf_buffer_poll(timeout=200)
+            if args.duration and (time.time() - start) >= args.duration:
+                break
+    except KeyboardInterrupt:
+        pass
+    return 0
+```
+
+- **`handle` 콜백**: `bpf["events"].event(data)` 로 원시 바이트를 `event_t` 구조체로 복원하고, ctypes 필드(`e.comm`·`e.ret`·`e.fname`)를 꺼내 한 줄로 출력합니다. 음수 fd 는 `(실패)` 로 표시합니다.
+- **`open_perf_buffer(handle)` + `perf_buffer_poll(timeout=200)`**: 6-2절의 폴링 패턴 그대로 — 콜백을 등록한 뒤 주기적으로 폴링하면 커널이 쌓아둔 이벤트가 `handle` 로 밀려옵니다(push). 집계형 맵 읽기(`items()`)와 달리, 개별 이벤트가 발생 순서대로 흘러나오는 **스트리밍** 방식입니다.
+
+---
+
 ## 💡 핵심 요약
 
 - BCC = **Python 로더 + C 커널 코드 + 런타임 clang 컴파일**. `BPF(text=...)`/`BPF(src_file=...)` 로 로드.

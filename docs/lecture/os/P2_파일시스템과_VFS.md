@@ -153,6 +153,80 @@ for i in $(seq 1 1000); do echo data > f$i; done
 
 ---
 
+## 💻 코드로 보기 — 이 관찰을 하는 eBPF 코드
+
+> 위 OS 개념을 eBPF로 어떻게 잡는지 실제 도구 코드를 직접 본다.
+
+2절에서 `vfsstat`은 VFS 호출을 "초당 몇 번"으로 셌다. 여기서는 그 길목에 직접 붙어 **프로세스별로 읽고 쓴 바이트**를 합산하는 도구 `labs/05_파일IO/vfs_rw.py`를 본다. 모든 `read()`/`write()`가 결국 커널의 `vfs_read()`/`vfs_write()`로 모인다(40장 VFS 추상)는 사실이, 이 코드가 단 두 함수에만 붙어 시스템 전체 파일 I/O를 잡아내는 근거다.
+
+### ① 커널에서 도는 부분 (eBPF C)
+
+`vfs_read`/`vfs_write` 커널 함수에 kprobe로 붙어, 세 번째 인자(`count`=요청 바이트 수)를 프로세스별로 누적한다.
+
+```c
+struct io_t { u64 rbytes; u64 wbytes; };
+BPF_HASH(io, u32, struct io_t);
+BPF_HASH(names, u32, struct comm_t);
+
+static inline void record(u32 pid, int is_write, u64 n) {
+    struct io_t init = {}, *p = io.lookup_or_try_init(&pid, &init);
+    if (p) {
+        if (is_write) { p->wbytes += n; } else { p->rbytes += n; }
+    }
+    struct comm_t c = {};
+    bpf_get_current_comm(&c.name, sizeof(c.name));
+    names.update(&pid, &c);
+}
+
+// vfs_read(struct file*, char __user*, size_t count, loff_t*)  → 3번째 인자 = count
+int kprobe__vfs_read(struct pt_regs *ctx, void *file, void *buf, size_t count) {
+    record(bpf_get_current_pid_tgid() >> 32, 0, count);
+    return 0;
+}
+int kprobe__vfs_write(struct pt_regs *ctx, void *file, void *buf, size_t count) {
+    record(bpf_get_current_pid_tgid() >> 32, 1, count);
+    return 0;
+}
+```
+
+- **부착(kprobe)** `kprobe__vfs_read` / `kprobe__vfs_write`: bcc에서 `kprobe__함수이름` 형태는 그 커널 함수 진입에 자동 부착된다. 추적점이 아니라 **커널 함수 자체**에 붙는 kprobe라, 함수 시그니처대로 인자를 그대로 받는다.
+- **인자에서 바이트 추출** 세 번째 인자 `size_t count`: `vfs_read/write`의 요청 바이트 수. 주석이 시그니처를 명시해 "왜 3번째 인자인가"를 보여준다.
+- **집계(맵)** `record(...)`: `io` 맵에 `pid`를 키로 읽기/쓰기 바이트를 누적한다. `is_write`로 같은 헬퍼를 읽기·쓰기 둘 다에 재사용한다. `names` 맵에는 PID→프로세스 이름을 같이 저장해 나중에 사람이 읽게 한다.
+
+> 보조 도구로 `labs/05_파일IO/open_audit.py`도 있다. 이쪽은 `sys_enter_openat`/`sys_exit_openat` 추적점에서 **경로·플래그·결과 fd**를 짝지어, 1절 `statsnoop`처럼 "누가 무슨 파일을 어떤 의도로 열어 성공했나"를 한 줄씩 보여준다. `vfs_rw.py`가 "얼마나(바이트)"라면 `open_audit.py`는 "무엇을(경로)"에 답한다.
+
+### ② 사용자 공간 부분 (Python)
+
+일정 시간 기다린 뒤 `io` 맵을 읽어, 총 I/O가 큰 프로세스 순으로 사람이 읽기 좋은 단위(B/KB/MB)로 출력한다.
+
+```python
+bpf = BPF(text=BPF_TEXT)
+time.sleep(args.duration)
+
+names = bpf["names"]
+rows = []
+for k, v in bpf["io"].items():
+    comm = names[k].name.decode("utf-8", "replace").rstrip("\x00") if k in names else "?"
+    rows.append((k.value, comm, v.rbytes, v.wbytes))
+rows.sort(key=lambda r: -(r[2] + r[3]))
+```
+
+- `time.sleep(args.duration)`: 그동안 커널 C가 `io` 맵을 갱신한다(집계 방식 — 폴링 불필요).
+- `for k, v in bpf["io"].items()`: PID별 `{rbytes, wbytes}`를 순회하고, `names`에서 이름을 붙인다.
+- `rows.sort(key=lambda r: -(r[2] + r[3]))`: 읽기+쓰기 합이 큰 순으로 정렬 → **파일 I/O를 가장 많이 한 프로세스**가 위로. `human()` 함수가 바이트를 KB/MB로 바꿔 출력한다.
+
+### 직접 실행
+
+```bash
+sudo python3 labs/05_파일IO/vfs_rw.py --duration 5
+# 보조: 누가 무슨 파일을 여는지 한 줄씩
+sudo python3 labs/05_파일IO/open_audit.py --comm cat
+```
+
+기대 결과: 추적 5초 동안 파일을 많이 읽고 쓴 프로세스들이 `읽기`/`쓰기` 바이트와 함께 상위에 표시된다 — `read()`/`write()`가 모두 VFS 한 길목으로 모인다는 40장 추상이 숫자로 확인된다.
+
+---
+
 ## 💡 핵심 요약 — OSTEP ↔ eBPF 대조표
 
 | 질문 | OSTEP의 답(이론·시뮬) | eBPF의 답(실측) |

@@ -157,6 +157,64 @@ dd if=/dev/zero of=/tmp/raidtest bs=1M count=50 oflag=direct; sync
 
 ---
 
+## 💻 코드로 보기 — 이 관찰을 하는 eBPF 코드
+
+> 위 OS 개념을 eBPF로 어떻게 잡는지 실제 도구 코드를 직접 본다.
+
+앞에서 쓴 `biolatency`는 편리한 완성품이지만, 그 안에서 무슨 일이 일어나는지는 가려져 있다. 사실 그 핵심은 **블록 추적점 두 개 사이의 시간을 재는 것**(34절에서 짚은 `block_rq_issue` → `block_rq_complete`)뿐이다. 그 알맹이를 짧은 `bpftrace` 한 토막으로 직접 써 본다. (아래는 개념을 보여주는 **예시** 스니펫이다 — `biolatency`의 축약판이라고 보면 된다.)
+
+### ① 커널에서 도는 부분 (bpftrace = eBPF C 축약)
+
+```c
+// blkio_lat.bt — 블록 I/O 지연을 히스토그램으로 (예시)
+tracepoint:block:block_rq_issue
+{
+    @start[args->dev, args->sector] = nsecs;   // 요청 발행 시각 저장
+}
+
+tracepoint:block:block_rq_complete
+/@start[args->dev, args->sector]/
+{
+    @usecs = hist((nsecs - @start[args->dev, args->sector]) / 1000);  // 지연 집계
+    delete(@start[args->dev, args->sector]);
+}
+```
+
+- **부착(발행)** `tracepoint:block:block_rq_issue`: 블록 요청이 장치로 **발행되는 순간**. 36장의 "장치가 일을 시작"하는 지점이다. `@start` 맵에 `(장치, 섹터)`를 키로 발행 시각(`nsecs`)을 저장한다 — C2의 futex 측정과 똑같은 "진입 시각 기억" 패턴이다.
+- **부착(완료)** `tracepoint:block:block_rq_complete`: 같은 요청이 **완료되는 순간**. 필터 `/@start[...]/`로 발행을 본 요청만 처리한다(짝 없는 완료는 무시).
+- **집계(헬퍼)** `hist((nsecs - @start[...]) / 1000)`: 완료−발행 = 그 I/O가 실제로 걸린 시간(ns), 1000으로 나눠 마이크로초로 만든 뒤 `hist()`로 **2의 거듭제곱 구간별 히스토그램**에 넣는다. 이것이 `biolatency`가 그리는 분포 막대의 정체다.
+- **정리** `delete(@start[...])`: 짝지은 발행 기록을 지워 맵이 새지 않게 한다.
+
+`(args->dev, args->sector)`를 키로 쓰는 이유는, 여러 I/O가 동시에 떠 있어도 **발행과 완료를 정확히 짝지어야** 지연이 맞기 때문이다.
+
+### ② 사용자 공간 부분 (bpftrace 실행·출력)
+
+bcc/Python과 달리 `bpftrace`는 사용자 공간 코드를 따로 쓰지 않는다. 실행하고 Ctrl-C로 멈추면 런타임이 `@usecs` 히스토그램을 알아서 ASCII 막대로 출력한다.
+
+```bash
+sudo bpftrace blkio_lat.bt
+# (또는 한 줄로)
+sudo bpftrace -e 'tracepoint:block:block_rq_issue { @start[args->dev,args->sector]=nsecs; }
+  tracepoint:block:block_rq_complete /@start[args->dev,args->sector]/
+  { @usecs=hist((nsecs-@start[args->dev,args->sector])/1000); delete(@start[args->dev,args->sector]); }'
+```
+
+출력의 `@usecs:` 아래 각 줄은 `[구간) 건수 |막대|` 형태로, 위 `biolatency` 히스토그램과 같은 그림을 직접 만든 것이다.
+
+### 직접 실행
+
+```bash
+# 터미널 1: 위 스니펫 실행
+sudo bpftrace blkio_lat.bt
+
+# 터미널 2: 디스크 I/O 유발 후 Ctrl-C
+dd if=/dev/zero of=/tmp/testfile bs=1M count=200 oflag=direct; sync
+```
+
+기대 결과: 멈추면 `@usecs` 히스토그램이 찍힌다. 가상 디스크라 막대가 마이크로초 구간(왼쪽)에 몰리고, 실제 HDD라면 밀리초 구간(오른쪽)으로 이동한다 — 37장 접근시간 공식이 하드웨어에 따라 다른 숫자를 낸다는 점을 직접 만든 도구로 확인한다.
+
+---
+
 ## 💡 핵심 요약 — OSTEP ↔ eBPF 대조표
 
 | 질문 | OSTEP의 답(이론·시뮬) | eBPF의 답(실측) |

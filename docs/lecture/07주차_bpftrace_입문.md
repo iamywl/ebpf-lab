@@ -346,6 +346,164 @@ interval:s:1 { print(@conn); clear(@conn); }'
 
 ---
 
+## 💻 코드로 보기 — bpftrace 예제 전문
+
+지금까지 본 원라이너들은 사실 `examples/` 폴더에 **완성된 `.bt` 스크립트**로 들어 있습니다. 아래 네 예제는 전부 `examples/` 에 있고, `sudo bpftrace <파일>.bt` 로 바로 실행할 수 있습니다. 각 코드에서 **probe(언제) / filter(조건) / action(무엇을)** 가 어디인지 짚어 보겠습니다.
+
+### hello.bt — 가장 단순한 반응 (execve 마다 인사)
+
+```awk
+#!/usr/bin/env bpftrace
+/*
+ * hello.bt — 가장 단순한 eBPF 프로그램 (bpftrace 버전)
+ *
+ * [무엇을 하나]
+ *   새 프로그램이 실행될 때마다(= execve 시스템콜) 한 줄 인사를 출력한다.
+ *   "eBPF 가 커널 이벤트에 반응해 코드를 실행한다"는 가장 기본 동작을 눈으로 본다.
+ *
+ * [어떻게 도나]
+ *   - tracepoint:syscalls:sys_enter_execve : "누군가 새 프로그램을 실행하려는 순간"이라는 커널 이벤트
+ *   - 그 순간마다 { } 안의 코드(여기선 printf)가 커널 문맥에서 실행된다.
+ *
+ * [실행]
+ *   sudo bpftrace hello.bt        (멈춘 듯 보여도 정상 — 이벤트가 오면 출력됨. Ctrl-C 로 종료)
+ *   띄워둔 채 다른 터미널에서  ls  나  date  를 쳐보면 줄이 찍힌다.
+ */
+
+BEGIN {
+    printf("eBPF 시작! 새 프로그램 실행을 지켜봅니다. (다른 창에서 명령을 쳐보세요, Ctrl-C 로 종료)\n");
+}
+
+tracepoint:syscalls:sys_enter_execve {
+    printf("안녕! PID %-6d (%s) 가 실행: %s\n", pid, comm, str(args.filename));
+}
+
+END {
+    printf("eBPF 종료. 안녕히 가세요!\n");
+}
+```
+
+- **probe** = `tracepoint:syscalls:sys_enter_execve` (누군가 새 프로그램을 실행하려는 순간). `BEGIN`/`END` 는 시작·종료 시 1회 도는 특수 probe입니다.
+- **filter** 는 없습니다(모든 execve 를 잡음). 조건 없이 항상 action 을 실행합니다.
+- **action** = `{ printf(...) }`. `pid`·`comm` 빌트인과 `str(args.filename)`(열린 인자 문자열)을 찍습니다.
+
+### opensnoop.bt — 어떤 프로세스가 어떤 파일을 여나 (스트리밍)
+
+```awk
+#!/usr/bin/env bpftrace
+/*
+ * opensnoop.bt — 어떤 프로세스가 어떤 파일을 여는지 실시간으로 잡기
+ *
+ * [무엇을 하나]
+ *   파일 열기(openat) 시스템콜을 가로채, (프로세스, 여는 파일 경로)를 한 줄씩 보여준다.
+ *   "이 프로그램이 무슨 파일을 건드리나?"를 들여다보는 고전 예제.
+ *
+ * [어떻게 도나]
+ *   - tracepoint:syscalls:sys_enter_openat : 파일 열기 시스템콜 진입점 (arm64 는 open 대신 openat 사용)
+ *   - args.filename : 열려는 파일 경로
+ *
+ * [실행]
+ *   sudo bpftrace opensnoop.bt        (다른 창에서 cat /etc/hostname 등을 실행 → 잡힘. Ctrl-C 종료)
+ *   출력이 너무 많으면 특정 프로세스만:  sudo bpftrace -e 'tracepoint:syscalls:sys_enter_openat /comm=="cat"/ { printf("%s\n", str(args.filename)); }'
+ */
+
+BEGIN {
+    printf("%-16s %-6s %s\n", "프로세스", "PID", "여는 파일");
+}
+
+tracepoint:syscalls:sys_enter_openat {
+    printf("%-16s %-6d %s\n", comm, pid, str(args.filename));
+}
+```
+
+- **probe** = `tracepoint:syscalls:sys_enter_openat` (파일 열기 진입점). arm64 는 `open` 대신 `openat` 을 씁니다.
+- **filter** 는 없지만, 주석의 한 줄 예처럼 `/comm=="cat"/` 를 붙이면 특정 프로세스만 거를 수 있습니다.
+- **action** 은 `comm`·`pid`·`str(args.filename)` 을 한 줄씩 즉시 출력 — 집계 없이 **이벤트마다 스트리밍**하는 형태입니다.
+
+### syscall_top.bt — 프로세스별 시스템콜 집계 (맵)
+
+```awk
+#!/usr/bin/env bpftrace
+/*
+ * syscall_top.bt — 어떤 프로세스가 시스템콜을 많이 부르나 (Top 집계)
+ *
+ * [무엇을 하나]
+ *   추적하는 동안 (프로세스 이름, 시스템콜)별 호출 횟수를 세서, 종료 시 정리해 보여준다.
+ *   9주차 실습(syscall-tracer)의 '맵 집계' 아이디어를 한 줄짜리로 맛본다.
+ *
+ * [어떻게 도나]
+ *   - tracepoint:raw_syscalls:sys_enter : "어떤 시스템콜이든 들어오는 순간" (모든 시스템콜 공통 입구)
+ *   - @[comm] = count() : comm(프로세스 이름)별로 1씩 누적하는 맵
+ *
+ * [실행]
+ *   sudo bpftrace syscall_top.bt        (몇 초 두었다가 Ctrl-C → 결과가 정렬되어 나옴)
+ */
+
+BEGIN {
+    printf("시스템콜 호출 집계 중... (Ctrl-C 로 멈추면 결과가 나옵니다)\n");
+}
+
+// 프로세스별 총 시스템콜 횟수
+tracepoint:raw_syscalls:sys_enter {
+    @by_process[comm] = count();   // by_process = 프로세스별 횟수
+}
+
+END {
+    printf("\n=== 프로세스별 시스템콜 호출 횟수 (적은→많은 순) ===\n");
+    // bpftrace 는 END 에서 맵을 자동으로 정렬·출력한다.
+}
+```
+
+- **probe** = `tracepoint:raw_syscalls:sys_enter` (모든 시스템콜의 공통 입구).
+- **filter** 는 없습니다.
+- **action** = `@by_process[comm] = count()` — `comm` 을 키로 하는 **맵 `@`** 에 1씩 누적합니다. opensnoop 과 달리 줄을 찍지 않고 커널에 모았다가, `END`(또는 Ctrl-C)에서 bpftrace 가 자동 정렬·출력합니다. 이것이 5절에서 본 **집계형**입니다.
+
+### openat_latency.bt — openat 지연 히스토그램 (진입·반환 짝짓기)
+
+```awk
+#!/usr/bin/env bpftrace
+/*
+ * openat_latency.bt — 파일 열기(openat)가 얼마나 걸리나 (지연 히스토그램)
+ *
+ * [무엇을 하나]
+ *   openat 시스템콜의 '진입~반환' 시간을 재서, 소요시간 분포를 히스토그램으로 그린다.
+ *   "느린 꼬리(tail latency)"를 눈으로 보는 성능 분석의 핵심 패턴.
+ *
+ * [어떻게 도나]
+ *   - sys_enter_openat 에서 시작 시각 저장(@start[tid] = nsecs)
+ *   - sys_exit_openat 에서 (현재시각 - 시작시각)을 계산해 hist() 에 누적
+ *   - hist() : 2의 거듭제곱 구간으로 자동 분류해 막대그래프(로그 스케일)로 보여줌
+ *
+ * [실행]
+ *   sudo bpftrace openat_latency.bt        (몇 초 두었다가 Ctrl-C → 히스토그램 출력)
+ *
+ * [관련] 14주차(성능 분석·지연 히스토그램).
+ */
+
+BEGIN {
+    printf("openat 지연 측정 중... (Ctrl-C 로 멈추면 히스토그램이 나옵니다)\n");
+}
+
+tracepoint:syscalls:sys_enter_openat {
+    @start[tid] = nsecs;       // 이 스레드의 openat 시작 시각 기록
+}
+
+tracepoint:syscalls:sys_exit_openat /@start[tid]/ {
+    @latency_ns = hist(nsecs - @start[tid]);   // latency_ns = 걸린 시간(나노초) 분포
+    delete(@start[tid]);
+}
+
+END {
+    clear(@start);             // 임시 맵 정리 (출력에서 제외)
+}
+```
+
+- **probe** 가 둘입니다 — `sys_enter_openat`(진입)에서 `@start[tid] = nsecs` 로 시작 시각을 저장하고, `sys_exit_openat`(반환)에서 경과 시간을 계산합니다.
+- **filter** = `/@start[tid]/` — 진입 시각이 기록된 스레드일 때만 반환을 처리합니다(짝이 맞을 때만). `tid` 를 키로 써서 스레드별로 시각을 따로 보관합니다.
+- **action** = `@latency_ns = hist(nsecs - @start[tid])` 로 (반환−진입) 소요 시간을 히스토그램에 누적하고, `delete(@start[tid])` 로 짝을 지웁니다. 이 **진입·반환 짝짓기** 패턴이 8주차 BCC 의 `BPF_HASH` 짝맞춤으로 그대로 이어집니다.
+
+---
+
 ## 💡 핵심 요약
 
 - bpftrace = **커널을 위한 awk**. 한 줄로 추적기를 표현하면 컴파일·부착·출력까지 자동.

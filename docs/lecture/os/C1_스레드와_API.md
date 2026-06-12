@@ -130,6 +130,77 @@ flowchart LR
 
 ---
 
+## 💻 코드로 보기 — 이 관찰을 하는 eBPF 코드
+
+> 위 OS 개념을 eBPF로 어떻게 잡는지 실제 도구 코드를 직접 본다.
+
+1절에서 `clone3` 시스템콜로 "새 실행 흐름이 생기는 순간"을 봤다면, 여기서는 그 형제 개념인 **시그널** — 즉 프로세스 사이의 비동기 통지(누가 누구를 깨우거나 죽이는가) — 를 잡는 실제 도구 `labs/01_프로세스/signal_trace.py`를 뜯어본다. 스레드/프로세스가 "생기는" 길과 "통지를 주고받는" 길을 같은 eBPF 패턴(추적점 부착 + perf 버퍼)으로 관찰한다는 것이 핵심이다.
+
+### ① 커널에서 도는 부분 (eBPF C)
+
+`BPF_TEXT` 안의 C 코드는 커널의 `signal:signal_generate` 추적점에 붙어, 시그널이 만들어지는 순간 (보낸 쪽·받는 쪽·시그널 번호)를 한 이벤트로 묶어 사용자 공간으로 올려보낸다.
+
+```c
+struct event_t {
+    u32 spid;        // 보낸 프로세스 PID
+    u32 tpid;        // 받는 프로세스 PID
+    int sig;
+    char scomm[16];  // 보낸 프로세스 이름
+    char tcomm[16];  // 받는 프로세스 이름
+};
+BPF_PERF_OUTPUT(events);
+
+TRACEPOINT_PROBE(signal, signal_generate) {
+    struct event_t e = {};
+    e.spid = bpf_get_current_pid_tgid() >> 32;
+    bpf_get_current_comm(&e.scomm, sizeof(e.scomm));
+    e.tpid = args->pid;
+    e.sig = args->sig;
+    bpf_probe_read_kernel(&e.tcomm, sizeof(e.tcomm), args->comm);
+    events.perf_submit(args, &e, sizeof(e));
+    return 0;
+}
+```
+
+- **부착** `TRACEPOINT_PROBE(signal, signal_generate)`: 커널이 어떤 작업에게 시그널을 만들어 줄 때마다 이 함수가 실행된다. 시스템콜(`kill`)뿐 아니라 커널 내부에서 생기는 시그널까지 모두 잡히는 길목이다.
+- **보낸 쪽** `bpf_get_current_pid_tgid() >> 32`: 지금 시그널을 만들고 있는, 즉 **보내는** 프로세스의 PID(상위 32비트=TGID). `bpf_get_current_comm`으로 그 이름도 함께 읽는다.
+- **받는 쪽** `args->pid` / `args->comm`: 추적점이 제공하는 인자에서 **받는** 대상의 PID와 이름을 꺼낸다. 커널 메모리라서 이름은 `bpf_probe_read_kernel`로 안전하게 복사한다.
+- **올려보내기(헬퍼)** `events.perf_submit(...)`: 집계(맵 누적)가 아니라 **이벤트 한 건씩** perf 버퍼로 사용자 공간에 즉시 전달한다. "누가 언제 누구에게"를 시간순으로 봐야 하므로 카운트가 아닌 이벤트 스트림 방식을 쓴다.
+
+### ② 사용자 공간 부분 (Python)
+
+Python 쪽은 이 C를 커널에 로드하고, perf 버퍼를 폴링하며 올라온 이벤트를 사람이 읽을 형태로 출력한다.
+
+```python
+bpf = BPF(text=BPF_TEXT)
+
+def handle(_cpu, data, _size):
+    e = bpf["events"].event(data)
+    s = SIGNAMES.get(e.sig, str(e.sig))
+    print(f"{time.strftime('%H:%M:%S'):<10} {e.spid:>8} "
+          f"{e.scomm.decode('utf-8','replace'):<14} -> {e.tpid:>8} "
+          f"{e.tcomm.decode('utf-8','replace'):<14} SIG{s}")
+
+bpf["events"].open_perf_buffer(handle)
+while True:
+    bpf.perf_buffer_poll(timeout=200)
+```
+
+- `BPF(text=BPF_TEXT)`: 위 C 코드를 컴파일·검증·로드하고 추적점에 자동 부착한다.
+- `open_perf_buffer(handle)` + `perf_buffer_poll(...)`: 커널이 `perf_submit`으로 올린 이벤트를 200ms마다 받아 `handle` 콜백으로 넘긴다.
+- `SIGNAMES.get(e.sig, ...)`: 시그널 번호(9, 15 …)를 `KILL`, `TERM` 같은 이름으로 바꿔 "누가 누구를 무엇으로" 한 줄에 보여준다 — C1에서 본 "프로세스 간 통지"의 실제 모습이다.
+
+### 직접 실행
+
+```bash
+sudo python3 labs/01_프로세스/signal_trace.py --duration 10
+# 테스트: 다른 창에서  sleep 100 &  후  kill %1
+```
+
+기대 결과: `kill %1`을 친 셸(보낸 PID)이 `sleep`(받는 PID)에게 `SIGTERM`을 보내는 줄이 한 건 찍힌다.
+
+---
+
 ## 💡 핵심 요약 — OSTEP ↔ eBPF 대조표
 
 | 질문 | OSTEP의 설명 | eBPF로 본 실제 |
