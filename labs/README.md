@@ -1,0 +1,105 @@
+# eBPF 실습 도구 모음 (labs) — "eBPF로 할 수 있는 것 + 운영체제 지식"
+
+> 이 강의의 컨셉 그대로다: **각 도구는 [🔬 eBPF로 무엇을 하는가] + [📖 배우는 운영체제 개념]** 짝으로 되어 있다.
+> 도구를 돌려 보면 프로세스·스케줄링·메모리·동기화·파일·네트워크·보안이 *실제로 어떻게 도는지* 눈에 보인다.
+> [examples/](../examples/)가 "한 줄 맛보기"라면, 여기는 **제대로 된 BCC 도구(Python+커널 C)** 11종이다.
+
+last_updated: 2026-06-12
+
+> 모든 출력 화면은 실습 VM(커널 6.17)에서 **실제로 실행해 캡처**한 것이다(생성 아님).
+
+---
+
+## 어떻게 실행하나
+
+```bash
+ssh ossca-ebpf                       # 실습 VM 접속 (처음이면 docs/lecture/00a 참고)
+cd ~/ebpf-labs/labs
+sudo python3 01_프로세스/proc_audit.py --duration 10
+```
+> eBPF 로드는 `sudo` 필요. 대부분 `--duration 초` 또는 `Ctrl-C` 로 멈춘다. 부하/트리거가 필요한 도구는 다른 창에서 `yes > /dev/null`, `curl`, `cat` 등을 실행한다.
+
+## 전체 도구 (OS 주제별)
+
+| 분류 | 도구 | 📖 배우는 OS 개념 (OSTEP) | 🔬 eBPF 부착 |
+|:---|:---|:---|:---|
+| 프로세스 | [proc_audit.py](01_프로세스/proc_audit.py) | exec, UID, 프로그램 실행 감사 (4–5장) | `tracepoint:sys_enter_execve` |
+| 프로세스 | [proc_lifetime.py](01_프로세스/proc_lifetime.py) | 프로세스 수명·종료, 짧은 수명 발견 | `sched:sched_process_exec/exit` |
+| 스케줄러 | [runq_latency.py](02_스케줄러/runq_latency.py) | 런큐·컨텍스트 스위치·대기시간 (7–10장) | `sched:sched_wakeup/switch` |
+| 스케줄러 | [oncpu_time.py](02_스케줄러/oncpu_time.py) | CPU 점유 시간, 타임슬라이스 | `sched:sched_switch` |
+| 메모리 | [page_faults.py](03_메모리/page_faults.py) | 페이지 폴트·가상메모리 (13–22장) | `software:page-faults` |
+| 메모리 | [mmap_size.py](03_메모리/mmap_size.py) | mmap/brk·주소공간 확장 | `tracepoint:sys_enter_mmap` |
+| 동기화 | [futex_contention.py](04_동기화/futex_contention.py) | 락·경합·블로킹 (28–33장) | `tracepoint:sys_enter/exit_futex` |
+| 파일 I/O | [vfs_rw.py](05_파일IO/vfs_rw.py) | VFS·읽기/쓰기 경로 (39–40장) | `kprobe:vfs_read/vfs_write` |
+| 파일 I/O | [open_audit.py](05_파일IO/open_audit.py) | 파일 디스크립터·open 플래그·inode | `tracepoint:sys_enter/exit_openat` |
+| 네트워크 | [conn_summary.py](06_네트워크/conn_summary.py) | TCP 연결·소켓·목적지 | `kprobe:tcp_v4_connect` |
+| 보안 | [file_guard.py](07_보안/file_guard.py) | 접근 제어·런타임 위협 탐지 | `tracepoint:sys_enter_openat` |
+
+---
+
+## 1. 프로세스 — proc_audit
+
+**📖 OS**: 프로세스는 exec() 로 새 프로그램 이미지를 입는다. 누가(UID) 무엇을 실행했나가 보안의 출발점.
+**🔬 eBPF**: execve 진입을 잡아 시각·PID·UID·실행파일을 실시간으로 보여준다.
+
+```bash
+sudo python3 01_프로세스/proc_audit.py --duration 10   # 다른 창에서 ls, date 등
+```
+![proc_audit 실제 실행 화면 (실제 터미널 캡처)](../docs/lecture/images/labs/lab_proc_audit.png)
+
+## 2. 스케줄러 — runq_latency
+
+**📖 OS**: 프로세스가 "실행 준비됐는데 CPU를 못 받고 런큐에서 기다린 시간"이 스케줄러 지연이다. 크면 CPU 경쟁이 심한 것.
+**🔬 eBPF**: 깨어난 시각과 CPU를 잡은 시각의 차이를 히스토그램으로.
+
+```bash
+sudo python3 02_스케줄러/runq_latency.py --duration 5   # 다른 창에서 yes > /dev/null
+```
+![runq_latency 실제 실행 화면 (실제 터미널 캡처)](../docs/lecture/images/labs/lab_runqlat.png)
+
+## 3. 동기화 — futex_contention
+
+**📖 OS**: 사용자 공간 뮤텍스는 경합이 없으면 원자연산뿐이지만, 경합하면 커널 `futex` 로 잠들었다 깨어난다. futex 폭증 = 락 경합.
+**🔬 eBPF**: futex 진입~반환 시간을 프로세스별로 합산.
+
+```bash
+sudo python3 04_동기화/futex_contention.py --duration 5
+```
+![futex_contention 실제 실행 화면 (실제 터미널 캡처)](../docs/lecture/images/labs/lab_futex.png)
+
+## 4. 파일 I/O — vfs_rw
+
+**📖 OS**: 모든 파일 입출력은 커널 VFS 의 `vfs_read`/`vfs_write` 로 모인다(공통 길목).
+**🔬 eBPF**: 그 두 함수에 kprobe 를 걸어 프로세스별 읽기/쓰기 바이트를 합산.
+
+```bash
+sudo python3 05_파일IO/vfs_rw.py --duration 5
+```
+![vfs_rw 실제 실행 화면 (실제 터미널 캡처)](../docs/lecture/images/labs/lab_vfs_rw.png)
+
+## 5. 네트워크 — conn_summary
+
+**📖 OS**: 클라이언트가 서버로 나가는 TCP 연결은 커널 `tcp_v4_connect` 를 거친다. 목적지 IP:포트가 정보다.
+**🔬 eBPF**: 프로세스별·목적지별 연결 횟수를 집계.
+
+```bash
+sudo python3 06_네트워크/conn_summary.py --duration 8   # 다른 창에서 curl 여러 번
+```
+![conn_summary 실제 실행 화면 (실제 터미널 캡처)](../docs/lecture/images/labs/lab_conn.png)
+
+## 6. 보안 — file_guard
+
+**📖 OS**: 접근 제어와 민감 자원(/etc/shadow, SSH 키). Falco/Tetragon 같은 런타임 보안 도구의 축소판.
+**🔬 eBPF**: openat 으로 열리는 경로를 보고 민감 패턴에 걸리면 경보(시각·PID·UID·경로).
+
+```bash
+sudo python3 07_보안/file_guard.py            # 다른 창에서 cat /etc/shadow
+```
+![file_guard 실제 실행 화면 (실제 터미널 캡처)](../docs/lecture/images/labs/lab_file_guard.png)
+
+---
+
+## 더 보기
+- 한 줄 예제 → [examples/](../examples/) · 자기검증 추적기 → [projects/](../projects/)
+- 운영체제 개념 깊이 → [강의 OS 트랙](../docs/lecture/os/README.md)
+- 모르는 코드·용어 → [C 미니부록](../docs/lecture/00b_준비_C언어_미니부록.md) · [용어집](../docs/lecture/00c_용어집_약어사전.md)

@@ -17,6 +17,7 @@ rsync -az --delete \
   -e "ssh" \
   "${REPO_DIR}/projects" \
   "${REPO_DIR}/examples" \
+  "${REPO_DIR}/labs" \
   "${REPO_DIR}/README.md" \
   "${SSH_HOST}:${REMOTE_DIR}/"
 
