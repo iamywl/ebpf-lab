@@ -78,10 +78,10 @@ cd ~/ebpf-labs/labs && sudo python3 03_메모리/page_faults.py --duration 4
 | 27 | `27._Interlude_Thread_API.pptx` | pthread_create/join | `bpftrace sys_enter_clone` (스레드=clone) | [C1](C1_스레드와_API.md) |
 | 28 | `28._Locks_v2.pptx` | 락, 원자연산, futex | `labs/04_동기화/futex_contention.py` | [C2](C2_락_동기화_그리고_버그.md) |
 | 29 | `29._Lockbased_Concurrent_Data_Structures.pptx` | 락 자료구조, 경합 | `futex_contention.py` (경합 시 futex 폭증) | [C2](C2_락_동기화_그리고_버그.md) |
-| 30 | `30._Condition_Variables.pptx` | 조건변수(대기/통지) | `futex_contention.py` · `bpftrace futex(FUTEX_WAIT)` | [C2](C2_락_동기화_그리고_버그.md) |
-| 31 | `31._Semaphore.pptx` | 세마포어 | `futex_contention.py` | [C2](C2_락_동기화_그리고_버그.md) |
+| 30 | `30._Condition_Variables.pptx` | 조건변수(대기/통지) | `labs/04_동기화/futex_contention.py` + `cvsem_demo` | [C3](C3_조건변수_세마포어_이벤트기반.md) |
+| 31 | `31._Semaphore.pptx` | 세마포어 | `futex_contention.py` + `cvsem_demo` | [C3](C3_조건변수_세마포어_이벤트기반.md) |
 | 32 | `32._Common_Concurrency_Problems.pptx` | 데이터 레이스·데드락 | 데모 `race.c`(갱신 유실) · `offcputime-bpfcc`(블로킹) | [C2](C2_락_동기화_그리고_버그.md) |
-| 33 | `33_Event-basedConcurrencyAdvanced.pptx` | 이벤트 기반, epoll | `bpftrace sys_enter_epoll_wait` (가까운 실측) | — |
+| 33 | `33_Event-basedConcurrencyAdvanced.pptx` | 이벤트 기반, epoll | `labs/04_동기화/epoll_trace.py` (epoll_ctl/wait) | [C3](C3_조건변수_세마포어_이벤트기반.md) |
 
 **같이 해보기 (예: 28·32장 락/레이스)**
 ```bash
