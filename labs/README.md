@@ -19,6 +19,8 @@ sudo python3 01_프로세스/proc_audit.py --duration 10
 ```
 > eBPF 로드는 `sudo` 필요. 대부분 `--duration 초` 또는 `Ctrl-C` 로 멈춘다. 부하/트리거가 필요한 도구는 다른 창에서 `yes > /dev/null`, `curl`, `cat` 등을 실행한다.
 
+> ✅ **합격(성공) 기준 공통**: ① `sudo`로 **에러 없이 로드**되고(검증기 거부·헤더 에러 없음), ② 트리거를 줬을 때 **그 활동이 출력에 반영**되면 성공이다. 각 도구의 구체 기준은 아래 절의 **✅ 성공 기준** 줄에 있다. 제출은 *실제 터미널 캡처 + 3줄 해석*(무엇을 트리거했고, 무엇이 찍혔고, OS 개념과 어떻게 연결되나).
+
 ## 전체 도구 (OS 주제별)
 
 | 분류 | 도구 | 📖 배우는 OS 개념 (OSTEP) | 🔬 eBPF 부착 |
@@ -48,6 +50,8 @@ sudo python3 01_프로세스/proc_audit.py --duration 10
 ```bash
 sudo python3 01_프로세스/proc_audit.py --duration 10   # 다른 창에서 ls, date 등
 ```
+> ✅ **성공 기준**: 다른 창에서 `ls`·`date` 등을 실행하면, 그 **시각·PID·UID·실행파일명**이 한 줄씩 즉시 찍힌다. 아무 명령도 안 하면 조용하다(이벤트 기반이므로 정상).
+
 ![proc_audit 실제 실행 화면 (실제 터미널 캡처)](../docs/lecture/images/labs/lab_proc_audit.png)
 
 ## 2. 스케줄러 — runq_latency
@@ -58,6 +62,8 @@ sudo python3 01_프로세스/proc_audit.py --duration 10   # 다른 창에서 ls
 ```bash
 sudo python3 02_스케줄러/runq_latency.py --duration 5   # 다른 창에서 yes > /dev/null
 ```
+> ✅ **성공 기준**: 종료 시 런큐 지연 **히스토그램**(2의 거듭제곱 버킷 `usecs`)이 출력된다. 다른 창에서 `yes > /dev/null`로 CPU 경쟁을 키우면 분포가 **오른쪽(더 긴 지연)으로** 이동하는 것이 보이면 제대로 측정한 것.
+
 ![runq_latency 실제 실행 화면 (실제 터미널 캡처)](../docs/lecture/images/labs/lab_runqlat.png)
 
 ## 3. 동기화 — futex_contention
@@ -68,6 +74,8 @@ sudo python3 02_스케줄러/runq_latency.py --duration 5   # 다른 창에서 y
 ```bash
 sudo python3 04_동기화/futex_contention.py --duration 5
 ```
+> ✅ **성공 기준**: 락 경합이 있는 프로세스의 **futex 누적 대기시간**이 프로세스별로 출력된다. 경합이 거의 없는 한가한 시스템이면 값이 작거나 비는데(정상), 다른 창에서 멀티스레드 부하를 주면 수치가 커진다.
+
 ![futex_contention 실제 실행 화면 (실제 터미널 캡처)](../docs/lecture/images/labs/lab_futex.png)
 
 ## 4. 파일 I/O — vfs_rw
@@ -78,6 +86,8 @@ sudo python3 04_동기화/futex_contention.py --duration 5
 ```bash
 sudo python3 05_파일IO/vfs_rw.py --duration 5
 ```
+> ✅ **성공 기준**: 다른 창에서 `cat 큰파일` 또는 `dd`로 읽기/쓰기를 일으키면, 해당 **프로세스별 읽은/쓴 바이트 합계**가 출력에 잡힌다.
+
 ![vfs_rw 실제 실행 화면 (실제 터미널 캡처)](../docs/lecture/images/labs/lab_vfs_rw.png)
 
 ## 5. 네트워크 — conn_summary
@@ -88,6 +98,8 @@ sudo python3 05_파일IO/vfs_rw.py --duration 5
 ```bash
 sudo python3 06_네트워크/conn_summary.py --duration 8   # 다른 창에서 curl 여러 번
 ```
+> ✅ **성공 기준**: 다른 창에서 `curl http://example.com`을 여러 번 하면, **프로세스별·목적지(IP:포트)별 연결 횟수**가 집계되어 나온다. 횟수가 curl 실행 수와 대략 맞으면 정확히 잡은 것.
+
 ![conn_summary 실제 실행 화면 (실제 터미널 캡처)](../docs/lecture/images/labs/lab_conn.png)
 
 ## 6. 보안 — file_guard
@@ -98,6 +110,8 @@ sudo python3 06_네트워크/conn_summary.py --duration 8   # 다른 창에서 c
 ```bash
 sudo python3 07_보안/file_guard.py            # 다른 창에서 cat /etc/shadow
 ```
+> ✅ **성공 기준**: 다른 창에서 `cat /etc/shadow`(또는 SSH 키 경로)를 열면 **경보 한 줄**(시각·PID·UID·경로)이 뜬다. 평범한 파일을 열 때는 조용하면(=오탐 없음) 잘 동작하는 것.
+
 ![file_guard 실제 실행 화면 (실제 터미널 캡처)](../docs/lecture/images/labs/lab_file_guard.png)
 
 ---

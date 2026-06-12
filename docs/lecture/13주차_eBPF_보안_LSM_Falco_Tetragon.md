@@ -2,6 +2,11 @@
 > 같은 커널 가시성을 이번엔 "방어"에 쓴다. 시스템콜을 거르는 seccomp 부터, 보안 결정을 내리는 LSM, 그리고 탐지(Falco)와 강제(Tetragon)까지
 last_updated: 2026-06-11
 
+> 🧭 **이번 주 동선**  ·  📘 과목1 13주차 🟢 (생태계 개요)  ·  📕 과목2 11주차 🔵 (LSM 훅·탐지)
+> - 🔬 **실습(VM `ssh ossca-ebpf`)**: `labs/07_보안/file_guard.py` · `sudo capable-bpfcc` · `sudo execsnoop-bpfcc`
+> - 🧵 **OS 트랙 함께 보기**: —
+> - ↔️ **이동**: ⬅️ [12주차 XDP·tc·Cilium](12주차_eBPF_네트워킹_XDP_tc_Cilium.md) · 🏠 [강의 인덱스](README.md) · ➡️ [14주차 관측성·프로파일링](14주차_관측성과_성능분석_프로파일링.md)
+
 ## 이번 주 학습 목표
 - 왜 eBPF 가 **런타임 보안**에 잘 맞는지(커널 전역 가시성 + 낮은 오버헤드)를 설명할 수 있다.
 - **seccomp-bpf**(정적 시스템콜 허용/차단)의 동작과 한계를 안다.

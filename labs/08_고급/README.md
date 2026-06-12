@@ -8,6 +8,8 @@ last_updated: 2026-06-12
 
 > 빌드 도구: `clang`/`llvm`/`libbpf-dev`/`make`(VM에 설치됨). C 예제는 `make` 로 빌드.
 
+> ✅ **합격(성공) 기준 공통**: ① `make`가 **에러 없이 빌드**되고(바이너리/스켈레톤 생성), ② 로드·실행 후 **트리거를 줬을 때 의도한 동작**(추적 출력·패킷 드롭·카운트 증가)이 관측되면 성공. 제출은 *빌드 + 실행 캡처(실제 터미널)* + 3줄 해석.
+
 ---
 
 ## 1. libbpf + CO-RE + ring buffer — `01_libbpf_execsnoop/`
@@ -20,6 +22,8 @@ cd ~/ebpf-labs/labs/08_고급/01_libbpf_execsnoop
 make                 # vmlinux.h → BPF오브젝트(clang) → 스켈레톤(bpftool) → 링크(libbpf)
 sudo ./execsnoop     # 다른 창에서 ls/date 실행, Ctrl-C 종료
 ```
+> ✅ **성공 기준**: `make`가 `vmlinux.h`→`.bpf.o`→`.skel.h`→실행파일까지 에러 없이 만들고, 실행 후 다른 창의 `ls`/`date` exec 이벤트가 **ring buffer로 한 줄씩 스트리밍**된다.
+
 ![libbpf execsnoop 실제 실행 (실제 터미널 캡처)](../../docs/lecture/images/labs/advdemo_libbpf.png)
 
 > 빌드 파이프라인: `execsnoop.bpf.c` →(clang -target bpf)→ `.bpf.o` →(bpftool gen skeleton)→ `.skel.h` →(cc+libbpf)→ 실행파일.
@@ -34,6 +38,8 @@ cd ~/ebpf-labs/labs/08_고급/02_xdp_방화벽
 make && sudo ./xdp_firewall lo
 #  다른 창:  ping -c3 127.0.0.1   → 100% 손실(XDP가 드롭) /   curl 127.0.0.1:22 → TCP 카운트
 ```
+> ✅ **성공 기준**: `lo`에 붙인 뒤 `ping -c3 127.0.0.1`이 **100% packet loss**(XDP가 커널 도달 전 드롭)이고 ICMP 카운터가 증가한다. `curl 127.0.0.1:22`는 TCP로 통과·카운트. **SSH가 끊기지 않으면**(외부 IF 영향 없음) 안전하게 성공.
+
 ![XDP ICMP 드롭 실제 실행 — ping 100% 손실 (실제 터미널 캡처)](../../docs/lecture/images/labs/advdemo_xdp.png)
 
 > 위 화면: `ICMP(차단)=3` 으로 세고 **ping이 100% packet loss** = 커널에 닿기 전에 드롭. `TCP=13`은 통과·카운트.
@@ -49,6 +55,8 @@ cd ~/ebpf-labs/labs/08_고급/03_uprobe_usdt
 cc -O2 -o /tmp/target target.c && /tmp/target &     # noinline 함수 compute 를 가진 데모
 sudo python3 uprobe_func.py /tmp/target              # compute(a,b) 호출·인자 추적
 ```
+> ✅ **성공 기준**: `/tmp/target`이 `compute(a,b)`를 호출할 때마다 **인자 `a`·`b` 값**이 추적 출력에 찍힌다(소스 수정 없이 사용자 함수 내부를 본 것).
+
 ![uprobe 함수 추적 실제 실행 (실제 터미널 캡처)](../../docs/lecture/images/labs/advdemo_uprobe.png)
 
 ## 4. USDT — 애플리케이션 정적 추적점 — `03_uprobe_usdt/usdt_trace.bt`
@@ -61,6 +69,8 @@ sudo bpftrace usdt_trace.bt          # @broadcasts[usdt_trigger] 가 증가
 # 목록:  sudo bpftrace -l 'usdt:/usr/lib/aarch64-linux-gnu/libc.so.6:*'
 ```
 
+> ✅ **성공 기준**: `/tmp/usdt_trigger` 실행 중 `@broadcasts[usdt_trigger]` 카운터가 **증가**한다. 프로그램에 미리 박힌 정적 추적점(USDT)을 잡은 것.
+
 ## 5. ring buffer (BCC 버전) — `04_ringbuf_BCC/ringbuf_exec.py`
 
 **🔬 무엇**: 같은 ring buffer를 **BCC API**로(`BPF_RINGBUF_OUTPUT`/`ringbuf_reserve`/`open_ring_buffer`). perf buffer와 대비해 순서 보존·효율을 체감.
@@ -68,6 +78,8 @@ sudo bpftrace usdt_trace.bt          # @broadcasts[usdt_trigger] 가 증가
 ```bash
 sudo python3 04_ringbuf_BCC/ringbuf_exec.py    # 다른 창에서 ls/date
 ```
+
+> ✅ **성공 기준**: 다른 창의 `ls`/`date` exec 이벤트가 **ring buffer(BCC API)** 로 순서대로 출력된다. perf buffer 예제와 비교해 순서 보존·효율을 체감하면 성공.
 
 ---
 

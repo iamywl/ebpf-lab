@@ -4,6 +4,11 @@
 
 last_updated: 2026-06-11
 
+> 🧭 **이번 주 동선**  ·  📘 과목1 8주차 🟢 (BCC + 실습①)  ·  📕 과목2 해당 없음
+> - 🔬 **실습(VM `ssh ossca-ebpf`)**: `sudo opensnoop-bpfcc` · `projects/syscall-tracer`(9주차로 이어짐)
+> - 🧵 **OS 트랙 함께 보기**: —
+> - ↔️ **이동**: ⬅️ [7주차 bpftrace 입문](07주차_bpftrace_입문.md) · 🏠 [강의 인덱스](README.md) · ➡️ [9주차 실습① 시스템콜 추적기](09주차_실습1_시스템콜_추적기.md)
+
 ---
 
 ## 이번 주 학습 목표

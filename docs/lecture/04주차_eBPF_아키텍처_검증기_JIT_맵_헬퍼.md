@@ -3,6 +3,11 @@
 
 last_updated: 2026-06-11
 
+> 🧭 **이번 주 동선**  ·  📘 과목1 해당 없음  ·  📕 과목2 1주차 🔵 (검증기·JIT·맵 내부)
+> - 🔬 **실습(VM `ssh ossca-ebpf`)**: `sudo bpftool prog show` · `sudo bpftool map show` · 검증기 거부 재현(NULL 검사 뺀 BCC 로드)
+> - 🧵 **OS 트랙 함께 보기**: —
+> - ↔️ **이동**: ⬅️ [3주차 BPF→eBPF 역사](03주차_BPF에서_eBPF로_역사와_등장배경.md) · 🏠 [강의 인덱스](README.md) · ➡️ [5주차 프로그램 타입](05주차_프로그램_타입과_부착지점.md)
+
 > 🔰 **1학년·입문자 진입로**: 이번 주는 이론의 핵심이라 C 코드로 설명하는 부분이 많습니다.
 > C 가 낯설면 [C 언어 미니부록](00b_준비_C언어_미니부록.md)을 먼저 보고, 용어는 [용어 사전](00c_용어집_약어사전.md)에서 찾으세요.
 > **코드를 한 줄씩 못 읽어도 괜찮습니다** — 각 절의 굵은 글씨 핵심 메시지(예: "검증기가 위험한 코드를 로드 전에 막는다")만 따라가도 이번 주 목표는 달성됩니다.
@@ -144,6 +149,27 @@ buf[idx] = 0;                // idx가 0..15 임을 증명 못 함 → 거부
 - **헬퍼 인자 타입이 검증기 기대와 어긋남**: 안전한 버퍼인데도 검증기가 "크기를 증명할 수 없다"며 막는 경우.
 
 그래서 eBPF 개발은 종종 "검증기를 설득하는" 작업이 됩니다. 코드를 *더 안전하게* 바꾸는 게 아니라, *검증기가 안전성을 증명할 수 있는 형태로* 다시 쓰는 것이죠.
+
+**그림으로 보는 값 범위 추적.** 위 2.5 예시 3의 `buf[idx]`가 왜 거부되고, `idx &= 15;` 한 줄로 왜 통과되는지를 검증기의 **레지스터 상태 변화**로 따라가 봅시다. 검증기는 `idx`가 *지금 가질 수 있는 값의 범위*를 매 명령마다 갱신합니다.
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
+flowchart TB
+    S["idx = ctx->some_field 를 읽음\n검증기 상태: idx ∈ [0, 4294967295]\n(필드 타입은 u32 — 상한 정보가 없다)"]
+    S --> A["경로 A: 곧장 buf[idx]\n버퍼는 16칸인데 idx 상한이 40억\n→ '0..15 안'을 증명 불가"]
+    S --> B["경로 B: idx &= 15; 먼저 실행\n검증기 상태: idx ∈ [0, 15]\n→ buf[idx]가 버퍼 안임을 증명"]
+    A --> AX["❌ 로드 거부\n(verifier log: invalid access to\nmap/stack, R_ off=...)"]
+    B --> BX["✅ 검증 통과 → JIT → 실행"]
+    style S fill:#ffffff
+    style A fill:#ffffff
+    style B fill:#ffffff
+    style AX fill:#ffffff
+    style BX fill:#ffffff
+```
+
+_그림. 검증기의 값 범위(value range) 추적 — 같은 `buf[idx]`라도 `idx`의 증명된 범위가 버퍼 경계 안임을 보일 수 있어야 통과한다._
+
+> 🤔 **왜 `ctx->some_field`는 처음에 범위를 모를까?** 그 필드의 C 타입이 `u32`라는 것만으로는 검증기가 "이 값은 0~15"라고 단정할 근거가 없습니다 — `u32`가 담을 수 있는 모든 값(0 ~ 약 40억)이 다 가능하다고 **보수적으로** 가정합니다(2.6절). 그래서 `if (idx < 16)` 같은 분기를 통과하거나 `idx &= 15`로 비트를 잘라내, *검증기가 따라갈 수 있는 형태로* 범위를 직접 좁혀 줘야 합니다. "나는 안전하다"가 아니라 "여기 증명이 있다"를 코드로 보여 주는 셈입니다.
 
 > 💬 핵심 한 줄: 검증기는 "이 프로그램은 절대 사고를 안 친다"를 **수학적으로 보수적으로** 증명합니다. 그래서 가끔 "안전한데도 거부"되는 일이 생깁니다. 안전성을 위해 표현력을 일부 희생한 트레이드오프입니다.
 

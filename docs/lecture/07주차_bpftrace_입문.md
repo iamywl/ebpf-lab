@@ -4,6 +4,11 @@
 
 last_updated: 2026-06-11
 
+> 🧭 **이번 주 동선**  ·  📘 과목1 4주차 🟢  ·  📕 과목2 해당 없음
+> - 🔬 **실습(VM `ssh ossca-ebpf`)**: `examples/` .bt 5종 (`sudo bpftrace examples/01_기본동작/hello.bt`)
+> - 🧵 **OS 트랙 함께 보기**: —
+> - ↔️ **이동**: ⬅️ [6주차 개발환경](06주차_개발환경_VM_BTF_CO-RE개념.md) · 🏠 [강의 인덱스](README.md) · ➡️ [8주차 BCC 입문](08주차_BCC_입문_맵과_perf이벤트.md)
+
 ---
 
 ## 이번 주 학습 목표
