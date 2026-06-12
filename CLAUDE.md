@@ -53,8 +53,15 @@ ebpf/
 
 **① 스크린샷·이미지 — 무조건 실제 캡처**
 - 이미지는 **실제 터미널 화면을 그대로 캡처**한다. **생성·렌더링(Pillow로 터미널처럼 그리기 등) 절대 금지.**
-- 방법: macOS `osascript`로 Terminal에서 명령 실행 → `screencapture -x -o -l<window-id>`(가려져도 정확) → 빈 여백만 크롭(내용 불변).
 - 캡션은 정확히 "실제 터미널 화면 캡처". 내용은 VM 실제 실행 결과여야 함(원본 텍스트 `examples/_sample_output/`·`docs/captures/`).
+- **메인이 직접** 캡처(서브에이전트 ✗ — GUI 자동화·화면 녹화 권한 필요). **검증된 표준 절차**(2026-06-12 동작 확인):
+  1. **텍스트 증거 먼저**: `ssh ossca-ebpf "<cmd>"` 출력을 `examples/_sample_output/`·`docs/captures/`에 저장(스샷과 내용 일치 보증).
+  2. **Terminal에서 실행 + 창 크기 키우기**(출력 전부 보이게): osascript로 새 창에 `do script "clear; ssh ossca-ebpf \"<cmd>\"; echo; echo '[VM ossca-ebpf - kernel 6.17] <영문 캡션>'"` → `delay 5` → `set bounds of front window to {80,80,800,660}`. *캡션·echo는 영문/ASCII 권장*(터미널 폰트 깨짐 방지). bpftrace 맵 한글 금지 규칙(③)도 그대로.
+  3. **창 영역 캡처**: `B=$(osascript -e 'tell application "Terminal" to get bounds of front window')` 로 `{x1,y1,x2,y2}`(points) 취득 → `screencapture -x -o -R$x1,$y1,$((x2-x1)),$((y2-y1)) out.png`. Retina면 출력 px는 2배(정상).
+  4. **반드시 Read로 검증**: 캡처한 `out.png`를 Read 도구로 열어 **검은 화면·잘림이 아닌 실제 출력**인지 눈으로 확인. 잘리면 창을 더 키워 재캡처.
+  5. **빈 여백만 크롭**(내용 불변) → `docs/lecture/images/...`에 배치 → 강의에 `![... (실제 터미널 캡처)](상대경로.png)` 임베드 → 임시파일·열어둔 창 정리.
+  > 가려진(occluded) 창까지 잡는 `screencapture -l<CGWindowID>` 는 CGWindowID가 필요한데 기본 `python3`에 `Quartz`(pyobjc)가 없어 이 환경에선 불가 → **영역(`-R`) 캡처가 기본**. 캡처 순간만 창을 앞면(`activate`)에 두면 됨.
+  > ⚠️ **중복 금지**: 캡처 전 대상 주차 파일에 이미 같은 스샷(`grep '\.png'`)이 있는지 확인. §10.1 캡처 계획은 이미 완료되어 전 강의 파일이 실측 스샷 보유 — 새로 만들지 말 것.
 
 **② 다이어그램 — 학술 논문(figure) 형식**
 - 모든 다이어그램은 **논문에 실리는 그림(figure)** 처럼 만든다: **무채색(흰 배경·검은 선·검은 글자)**, serif 글꼴, 군더더기·장식·그림자·색 강조 **없이** 간결하게.
