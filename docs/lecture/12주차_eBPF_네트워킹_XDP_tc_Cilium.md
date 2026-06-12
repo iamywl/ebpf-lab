@@ -208,6 +208,36 @@ flowchart LR
 
 ---
 
+## ⚙️ 리눅스 커널은 패킷을 단계마다 끌어올리며 eBPF 훅을 노출한다
+
+네트워킹 eBPF 를 이해하려면 패킷이 커널 안에서 어떻게 올라오는지를 먼저 그려야 합니다. 패킷은 **NIC → 드라이버 → 커널 네트워크 스택 → 소켓** 순으로 올라오며, 위로 갈수록 정보는 풍부해지지만 처리 비용도 커집니다. 스택에 진입하면 커널은 패킷을 무거운 표현인 `sk_buff` 로 감쌉니다. eBPF 훅은 이 경로의 두 길목에 걸립니다. **XDP** 는 `sk_buff` 가 만들어지기 전, 드라이버 최전선에 붙어 가장 빠르고, **tc(clsact)** 는 `sk_buff` 가 만들어진 뒤 큐잉 계층의 ingress/egress 양쪽에 붙어 풍부한 메타데이터를 다룹니다.
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
+flowchart LR
+    NIC["NIC"] --> DRV["드라이버"]
+    DRV -->|"XDP 훅 (sk_buff 전)"| STACK["네트워크 스택\n(sk_buff)"]
+    STACK -->|"tc 훅 (sk_buff 후)"| SOCK["소켓 / 앱"]
+```
+
+소스/구조 측면에서, XDP 프로그램은 `struct xdp_md` 를, tc 프로그램은 `struct __sk_buff` 를 컨텍스트로 받습니다. 우리 VM(커널 6.17 aarch64)에서 `bpftool net` 으로 부착 지점을 확인할 수 있습니다.
+
+---
+
+## 📸 실제 실행 화면 (실제 터미널 캡처)
+
+아래는 VM(커널 6.17 aarch64)에서 네트워크 훅 지점과 TCP 상태 전이를 직접 들여다본 모습입니다.
+
+![bpftool net show — 실제 터미널 캡처](images/more/w12_net.png)
+
+위는 `sudo bpftool net show` 로 XDP/tc 부착 지점을, `ip link` 로 인터페이스를 함께 확인한 실제 터미널 캡처입니다. 어떤 인터페이스의 어느 훅에 eBPF 가 붙어 있는지를 직접 볼 수 있습니다.
+
+![tcpstates-bpfcc — 실제 터미널 캡처](images/more/w12_tcpstates.png)
+
+위는 `tcpstates-bpfcc` 로 TCP 연결의 상태기계 전이(예: SYN_SENT → ESTABLISHED → CLOSE)를 추적한 실제 터미널 캡처입니다. 패킷이 스택을 오르내리며 소켓 상태가 어떻게 바뀌는지가 한 줄씩 기록됩니다.
+
+---
+
 ## 💡 핵심 요약
 - 패킷 경로 위 eBPF 훅: **XDP**(드라이버, `sk_buff` 전, 가장 빠름) → **tc/clsact**(스택 진입부, 양방향) → **socket/cgroup**(연결·프로세스 단위).
 - **XDP** 액션: `DROP/PASS/TX/REDIRECT`. 악성 트래픽을 비싼 작업 전에 버려 **DDoS 방어·로드밸런싱**에 강하다.

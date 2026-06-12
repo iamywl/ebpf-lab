@@ -221,6 +221,36 @@ flowchart LR
 
 ---
 
+## ⚙️ 리눅스 커널은 자기 타입 정보를 BTF 로 품고 있다
+
+eBPF 의 이식성은 커널 한복판에 들어 있는 작은 메타데이터 덩어리 하나에서 출발합니다. 커널을 빌드할 때(`CONFIG_DEBUG_INFO_BTF=y`) **BTF(BPF Type Format)** 가 함께 생성되어 부팅 후 `/sys/kernel/btf/vmlinux` 로 노출됩니다. BTF 는 그 커널이 가진 **모든 구조체의 레이아웃 정보**(어떤 필드가 몇 바이트째에 있는가)를 담습니다. 예를 들어 프로세스를 표현하는 `struct task_struct` 의 각 필드 위치가 여기에 적혀 있습니다. CO-RE 는 컴파일 시 오프셋을 박지 않고 재배치 표시만 남긴 뒤, 로드 시점에 이 BTF 를 읽어 **그 커널의 실제 오프셋으로 맞춰** 이식성을 얻습니다.
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
+flowchart LR
+    BUILD["커널 빌드\n(CONFIG_DEBUG_INFO_BTF=y)"] -->|"타입 정보 생성"| BTF["/sys/kernel/btf/vmlinux\n(구조체 레이아웃·오프셋)"]
+    BTF -->|"로드 시 참고"| CORE["CO-RE 재배치\n(오프셋 교정)"]
+    CORE --> PROG["여러 커널에서 도는 eBPF"]
+```
+
+소스/구조 측면에서, 이 파일은 커널 이미지(`vmlinux`)에 포함되어 빌드되며, 우리 VM(커널 6.17 aarch64)은 BTF 가 기본 활성화되어 `/sys/kernel/btf/vmlinux` 가 존재합니다.
+
+---
+
+## 📸 실제 실행 화면 (실제 터미널 캡처)
+
+아래는 VM(커널 6.17 aarch64)에 접속해 환경과 커널 구조체를 직접 확인한 모습입니다.
+
+![환경 한눈에 보기 — 실제 터미널 캡처](images/more/w6_env.png)
+
+위는 `uname` / `bpftrace --version` / `/sys/kernel/btf/vmlinux` 존재를 한 화면에서 확인한 실제 터미널 캡처입니다. 커널 6.17 과 BTF 파일이 함께 보이면 CO-RE 실습 준비가 끝난 것입니다.
+
+![bpftool 로 본 struct task_struct — 실제 터미널 캡처](images/more/w6_btf_task.png)
+
+위는 `bpftool btf dump` 로 커널 BTF 에서 `struct task_struct` 필드를 뽑아 본 실제 터미널 캡처입니다. 커널이 프로세스를 표현하는 실제 구조체와 그 필드들이 BTF 안에 그대로 들어 있음을 눈으로 확인할 수 있습니다.
+
+---
+
 ## 💡 핵심 요약
 
 - eBPF 는 리눅스 커널 기술이라 macOS 에서 직접 못 돌린다 → **tart 로 리눅스 VM** 을 띄워 실습한다.

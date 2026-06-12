@@ -299,6 +299,36 @@ sudo python3 execve_by_comm.py
 
 ---
 
+## ⚙️ 리눅스 커널은 BCC 가 보낸 바이트코드를 받아 perf 로 회신한다
+
+BCC 가 편리해 보여도, 그 아래에서는 커널과의 정해진 절차가 돌고 있습니다. BCC 는 **런타임에 clang 으로 C 소스를 eBPF 바이트코드로 컴파일**한 뒤, `bpf()` 시스템콜로 그 바이트코드를 커널에 **로드·부착**합니다. 커널은 검증기·JIT 를 거쳐 프로그램을 훅에 붙이고, 실행 중 모은 데이터를 **perf ring buffer(맵)** 에 담아 사용자 공간으로 **회신**합니다. 즉 사용자 공간(Python)과 커널이 맵을 사이에 두고 주고받는 구조입니다.
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
+flowchart LR
+    SRC["C 소스 문자열"] -->|"런타임 clang"| BC["eBPF 바이트코드"]
+    BC -->|"bpf() 로드·부착"| K["리눅스 커널\n(검증기·JIT·훅)"]
+    K -->|"perf ring buffer 로 회신"| PY["Python 프런트엔드"]
+```
+
+소스/구조 측면에서, 컴파일·로드를 담당하는 것은 `libbcc`(내부적으로 clang/LLVM 사용)이고, Python `bcc` 모듈이 그 위의 얇은 래퍼입니다. 우리 VM(커널 6.17 aarch64)에는 clang 18 과 커널 헤더가 갖춰져 이 파이프라인이 돕니다.
+
+---
+
+## 📸 실제 실행 화면 (실제 터미널 캡처)
+
+아래는 VM(커널 6.17 aarch64)에서 BCC 도구를 점검하고 직접 실행한 모습입니다.
+
+![설치된 BCC 도구 목록 — 실제 터미널 캡처](images/more/w8_bcctools.png)
+
+위는 VM 에 설치된 BCC 도구의 개수와 예시를 확인한 실제 터미널 캡처입니다. 약 128종에 이르는 완성형 도구가 함께 깔려 있어, 직접 짜기 전에 기성 도구로 관측을 시작할 수 있습니다.
+
+![opensnoop-bpfcc 실행 — 실제 터미널 캡처](images/more/w8_opensnoop.png)
+
+위는 `opensnoop-bpfcc` 로 시스템의 파일 열기(`open`)를 실시간으로 잡는 실제 터미널 캡처입니다. 어떤 프로세스가 어떤 파일을 여는지가 한 줄씩 스트리밍되는 것이 perf 이벤트 방식의 전형입니다.
+
+---
+
 ## 💡 핵심 요약
 
 - BCC = **Python 로더 + C 커널 코드 + 런타임 clang 컴파일**. `BPF(text=...)`/`BPF(src_file=...)` 로 로드.

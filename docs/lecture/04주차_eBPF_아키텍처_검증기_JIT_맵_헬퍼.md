@@ -291,6 +291,36 @@ flowchart TD
 
 ---
 
+## ⚙️ 리눅스 커널은 (이 주제를 커널은 이렇게 구현한다)
+
+eBPF 프로그램은 사용자 공간에서 컴파일된 바이트코드 상태로 **`bpf()` 시스템콜**을 통해 커널에 올라간다. 커널은 이를 곧바로 실행하지 않는다. 먼저 **검증기(verifier)** 가 정적 분석으로 종료성·메모리 안전성 등을 통과시켜야 하고, 통과한 뒤에야 **JIT 컴파일러**가 바이트코드를 그 CPU의 네이티브 기계어로 바꾼다. 그제서야 tracepoint·kprobe 같은 **부착 지점**에 매달려 실행될 수 있다. 맵과 헬퍼는 커널이 제공하는 자원으로, 프로그램은 이 둘을 통해서만 상태를 저장하고 커널 기능에 접근한다. 즉 "안전 검증이 먼저, 빠른 실행은 그다음"이라는 순서가 커널 구현의 뼈대다(앞의 6절 로드 파이프라인과 같은 흐름).
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
+flowchart LR
+    A["바이트코드(ELF)"] --> B["bpf() 시스템콜\n커널에 로드"]
+    B --> C{"검증기"}
+    C -- "거부" --> X["로드 실패"]
+    C -- "통과" --> D["JIT 컴파일"]
+    D --> E["부착(attach)\ntracepoint/kprobe"]
+```
+
+커널 소스에서 검증기는 `kernel/bpf/verifier.c`, `bpf()` 시스템콜 진입은 `kernel/bpf/syscall.c`가 담당한다.
+
+## 📸 실제 실행 화면 (실제 터미널 캡처)
+
+아래는 이 강의 VM(`ssh ossca-ebpf`, 커널 6.17, aarch64)에서 실제로 실행한 화면을 그대로 캡처한 것이다.
+
+![bpftool prog show 출력을 담은 실제 터미널 캡처](images/more/w4_progshow.png)
+
+*실제 터미널 캡처: `sudo bpftool prog show` — 지금 이 커널에 로드되어 있는 eBPF 프로그램 목록이다.* 각 항목의 ID·프로그램 타입(`tracepoint`, `kprobe` 등)·이름이 보이며, 검증기와 JIT를 통과해 실제로 부착된 프로그램만 여기에 나타난다.
+
+![검증기가 안전하지 않은 프로그램 로드를 거부하는 verifier 로그를 담은 실제 터미널 캡처](images/more/w4_verifier.png)
+
+*실제 터미널 캡처: 검증기의 거부 실증 — NULL 검사를 일부러 뺀 프로그램을 로드하자 verifier 로그와 함께 거부됐다.* 맵에서 꺼낸 포인터를 NULL 확인 없이 역참조하는 코드는 검증기가 위험하다고 판단해 **로드 자체를 막는다**. "안전하지 않으면 실행이 아니라 로드가 거부된다"는 4주차의 핵심 메시지가 화면으로 증명된 셈이다.
+
+---
+
 ## 💡 핵심 요약
 
 - eBPF는 사용자 코드를 **VM 바이트코드**로 표현한다(레지스터 11개, 스택 512B, 제한된 명령어). VM이라서 분석·이식·격리가 쉽다.

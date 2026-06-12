@@ -232,6 +232,41 @@ flowchart LR
 
 ---
 
+## ⚙️ 리눅스 커널은 보안 결정을 어디서 내리나
+
+리눅스는 보안 결정이 필요한 지점마다 **LSM(Linux Security Module) 훅**(`security_*` 함수)을 심어 둔다. 커널은 파일 열기·소켓 연결·프로세스 실행 직전에 이 훅을 호출해 "허용할지"를 묻고, SELinux·AppArmor 가 그 위에서 동작한다. **BPF LSM** 은 바로 이 훅에 eBPF 를 붙여 정책을 판단하게 한 것이다. 반면 **seccomp** 은 더 앞단인 **시스템콜 진입부**에서 시스템콜 자체를 거르는 고전 BPF 필터다. 즉 두 방어선은 거는 위치가 다르다.
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
+flowchart TB
+    APP["프로세스 동작"] --> SC["시스템콜 진입"]
+    SC --> SECCOMP{"seccomp 필터"}
+    SECCOMP -->|허용| HOOK["커널 내부 처리 중\nsecurity_* 훅"]
+    SECCOMP -->|차단| BLOCK1["차단 (ERRNO/KILL)"]
+    HOOK --> LSM{"BPF LSM 판단"}
+    LSM -->|"허용(0)"| OK["동작 수행"]
+    LSM -->|"거부(음수)"| BLOCK2["차단 🚫"]
+    HOOK -.->|관측| LOG["이벤트 기록·경보"]
+```
+
+소스/구조: LSM 훅은 커널 `security/security.c` 와 각 `security_*` 호출 지점에 있고, BPF LSM 은 `CONFIG_BPF_LSM`(커널 5.7+) 으로 활성화된다.
+
+---
+
+## 📸 실제 실행 화면 (실제 터미널 캡처)
+
+> 아래는 VM(커널 6.17 aarch64)에서 BCC 도구를 **실제 터미널에서 실행해 그대로 캡처**한 화면이다.
+
+![execsnoop-bpfcc — 모든 프로세스 실행(execve)을 실시간 감시 (실제 터미널 캡처)](images/more/w13_execsnoop.png)
+
+새로 뜨는 모든 프로세스의 PID·부모·명령줄이 보인다. 침입 탐지의 기본기 — "방금 무엇이 실행됐나"를 한눈에 본다.
+
+![capable-bpfcc — 권한 검사(capability) 추적 (실제 터미널 캡처)](images/more/w13_capable.png)
+
+커널이 어떤 권한(capability)을 누구에게 검사하는지 흐른다. 권한 상승(privilege escalation) 정황을 포착하는 데 활용한다.
+
+---
+
 ## 💡 핵심 요약
 - eBPF 는 **커널 전역 가시성 + 낮은 오버헤드 + 풍부한 컨텍스트**로 런타임 보안 센서에 적합하다.
 - **seccomp-bpf**: 시스템콜의 **정적** 허용/차단. 가볍지만 표현력 제한.

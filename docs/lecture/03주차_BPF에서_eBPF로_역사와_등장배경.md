@@ -165,6 +165,31 @@ flowchart LR
 
 ---
 
+## ⚙️ 리눅스 커널은 (이 주제를 커널은 이렇게 구현한다)
+
+고전 BPF(cBPF)는 커널 안에 들어 있는 **작은 가상머신(인터프리터)** 이었다. 사용자가 작성한 짧은 바이트코드 필터를 커널이 한 명령씩 해석·실행해, 패킷이 조건에 맞는지 판단했다. 레지스터 2개와 작은 메모리만으로 패킷 매칭에 특화된 구조였다. 2014년 확장에서 **64비트 레지스터·맵·헬퍼**가 더해지면서 이 작은 패킷 필터 VM이 추적·네트워킹·보안까지 다루는 범용 eBPF VM으로 바뀌었다. 즉, 커널 입장에서 보면 "패킷을 거르는 작은 인터프리터"가 "커널 안에서 안전하게 돌리는 작은 실행 엔진"으로 진화한 것이다.
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
+flowchart LR
+    A["cBPF VM\n(레지스터 2개·패킷 필터 전용)"] -->|"2014 확장\n64bit 레지스터·맵·헬퍼"| B["eBPF VM\n(범용 실행 엔진)"]
+    B --> T["추적/관측"]
+    B --> N["네트워킹"]
+    B --> S["보안"]
+```
+
+커널 소스에서 cBPF→eBPF 변환과 두 가상머신 관련 코드는 `kernel/bpf/` 및 `net/core/filter.c` 계열에 자리한다.
+
+## 📸 실제 실행 화면 (실제 터미널 캡처)
+
+아래는 이 강의 VM(`ssh ossca-ebpf`, 커널 6.17, aarch64)에서 실제로 실행한 화면을 그대로 캡처한 것이다.
+
+![tcpdump -d 로 출력한 cBPF 바이트코드를 담은 실제 터미널 캡처](images/more/w3_tcpdump.png)
+
+*실제 터미널 캡처: `sudo tcpdump -d 'tcp port 22'` — 1992년에 설계된 고전 BPF(cBPF) 바이트코드의 실물이다.* `tcpdump`는 사람이 쓴 필터 표현식(`tcp port 22`)을 cBPF 명령어로 컴파일하는데, `-d` 옵션이 그 결과 바이트코드를 사람이 읽을 수 있게 풀어 보여 준다. `ldh`·`jeq`·`ret` 같은 명령이 곧 커널 안 BPF 가상머신이 실행할 패킷 필터 프로그램이다.
+
+---
+
 ## 💡 핵심 요약
 - **고전 BPF(1992)** 는 패킷 필터링을 위해 "거르는 코드를 커널 안 작은 VM에서 실행"하는 아이디어로 출발했다.
 - **seccomp-bpf** 처럼 BPF는 일찍이 패킷을 넘어 **시스템콜 필터(보안)** 로도 확장됐다.
