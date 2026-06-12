@@ -2,6 +2,14 @@
 projects/syscall-tracer/workload
 projects/netflow-tracer/net_workload
 
+# libbpf/XDP 빌드 산출물 (make 로 재생성; vmlinux.h 는 20만 줄이라 커밋 금지)
+vmlinux.h
+*.bpf.o
+*.skel.h
+*.o
+labs/08_고급/01_libbpf_execsnoop/execsnoop
+labs/08_고급/02_xdp_방화벽/xdp_firewall
+
 # 파이썬 캐시
 __pycache__/
 *.pyc

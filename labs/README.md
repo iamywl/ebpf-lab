@@ -102,6 +102,10 @@ sudo python3 07_보안/file_guard.py            # 다른 창에서 cat /etc/shad
 
 ---
 
+## 🚀 고급 — 관측을 넘어 제작·강제로
+관측 도구(위 14종)를 익혔다면 → **[08_고급/](08_고급/README.md)**: **libbpf/CO-RE C · XDP 패킷 드롭(강제) · uprobe · USDT · ring buffer**.
+"eBPF로 할 수 있는 것"이 추적을 넘어 **프로덕션 제작·네트워크 강제**까지 확장된다(전부 VM 빌드·실행 검증).
+
 ## 더 보기
 - 한 줄 예제 → [examples/](../examples/) · 자기검증 추적기 → [projects/](../projects/)
 - 운영체제 개념 깊이 → [강의 OS 트랙](../docs/lecture/os/README.md)

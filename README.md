@@ -34,6 +34,9 @@ last_updated: 2026-06-11
 >
 > 🧰 **OS 주제별 본격 실습 도구 → [eBPF 실습 도구 모음 (labs) 14종](labs/README.md)**
 > — 프로세스·스케줄러·메모리·동기화·파일·네트워크·보안을 관찰하는 BCC 도구. *eBPF로 할 수 있는 것 + 운영체제 지식*.
+>
+> 🚀 **관측을 넘어 제작·강제까지 → [고급 실습 (labs/08_고급)](labs/08_고급/README.md)**
+> — libbpf/CO-RE C · XDP 패킷 드롭(강제) · uprobe · USDT · ring buffer (전부 VM 빌드·실행 검증).
 
 ---
 
