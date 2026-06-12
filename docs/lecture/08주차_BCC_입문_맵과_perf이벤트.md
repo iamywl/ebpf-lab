@@ -106,6 +106,26 @@ bpf = BPF(src_file=BPF_SOURCE)     # bpf/syscall_count.c 를 런타임 컴파일
 | `BPF_ARRAY(name, Type, N)` | 고정 크기 배열 맵 | 인덱스로 접근(설정값·작은 상태) |
 | `BPF_PERF_OUTPUT(name)` | perf 이벤트 출력 채널 | **스트리밍** (이벤트를 즉시 사용자 공간으로) |
 
+**`BPF_HASH` 같은 매크로는 어떻게 진짜 맵 연산이 되나 — clang rewriter.** 위 매크로들은 사실 표준 C 가 아닙니다. BCC 는 컴파일 전에 **clang rewriter**(clang 의 AST 를 손보는 전처리 단계)를 한 번 통과시켜, 이 약식 문법을 실제 BPF 맵 정의와 헬퍼 호출로 **펼칩니다(rewrite)**.
+
+| 우리가 쓴 약식 | rewriter 가 펼친 결과(개념) |
+|:---|:---|
+| `BPF_HASH(counts, K, V)` | `BPF_MAP_TYPE_HASH` 맵 정의 + 메타데이터 등록 |
+| `counts.lookup(&key)` | `bpf_map_lookup_elem(&counts, &key)` |
+| `counts.update(&key, &val)` | `bpf_map_update_elem(&counts, &key, &val, BPF_ANY)` |
+| `counts.lookup_or_try_init(&key, &init)` | `lookup` → 없으면 `update` 후 다시 `lookup` 하는 코드 블록 |
+| `events.perf_submit(ctx, &e, sizeof(e))` | `bpf_perf_event_output(...)` 헬퍼 호출 |
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
+flowchart LR
+    A["내가 쓴 C\n(BCC 매크로 포함)"] -->|"clang rewriter\n(매크로·메서드 전개)"| B["순수 C\n(bpf_map_* 헬퍼 호출)"]
+    B -->|"clang/LLVM 컴파일"| C["eBPF 바이트코드"]
+    C -->|"bpf() 로드"| D["커널(검증기·JIT)"]
+```
+
+> 그래서 `counts.lookup_or_try_init(...)` 같은 "메서드 호출처럼 생긴" 문법이 동작합니다. `counts` 는 객체가 아니라 맵 이름이고, `.lookup(...)` 은 rewriter 가 `bpf_map_lookup_elem(&counts, ...)` 로 바꿔주는 **약속된 표기**입니다. libbpf([11주차](11주차_libbpf와_CO-RE_프로덕션eBPF.md))에서는 이 매크로가 없어 헬퍼를 직접 부릅니다.
+
 실습①의 C 코드는 이 세 가지를 모두 씁니다.
 
 ```c
@@ -199,6 +219,36 @@ flowchart TB
 
 **선택 기준 한 줄**: "몇 번 일어났나"(횟수·통계)면 **맵**, "각각 언제·어디로 일어났나"(개별 기록)면 **perf 이벤트**.
 
+### 5-1. perf buffer vs ring buffer — 스트리밍의 두 세대
+
+"개별 이벤트를 사용자 공간으로 밀어 보내는" 채널에도 두 가지가 있습니다. `BPF_PERF_OUTPUT`(perf buffer)은 오래된 표준이고, 커널 5.8+ 에서 도입된 `BPF_RINGBUF_OUTPUT`(ring buffer)이 그 약점을 보완한 후속입니다.
+
+| 비교 | perf buffer (`BPF_PERF_OUTPUT`) | ring buffer (`BPF_RINGBUF_OUTPUT`) |
+|:---|:---|:---|
+| 버퍼 구조 | **CPU마다 따로** 버퍼 1개 | **모든 CPU가 공유**하는 버퍼 1개 |
+| 이벤트 순서 | CPU별로만 순서 보장(전역 순서 깨질 수 있음) | 제출 순서가 **전역으로** 보존 |
+| 메모리 효율 | CPU 수만큼 버퍼 → 메모리 더 씀 | 공유라 **메모리 절약** |
+| 예약/제출 | 항상 복사해서 제출 | `reserve`→직접 채움→`submit` (복사 1회 절약) |
+| 필요한 커널 | 오래된 커널도 가능 | **5.8 이상** 필요 |
+| 본 랩 | 실습②가 사용(호환성 우선) | 더 새 커널이면 권장 대안 |
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
+flowchart TB
+    subgraph PB["perf buffer: CPU마다 따로"]
+        C0["CPU0 이벤트"] --> B0[("버퍼0")]
+        C1["CPU1 이벤트"] --> B1[("버퍼1")]
+        B0 & B1 --> P1["폴링(CPU별 순서만)"]
+    end
+    subgraph RB["ring buffer: 공유 1개"]
+        D0["CPU0 이벤트"] --> RBUF[("공유 버퍼")]
+        D1["CPU1 이벤트"] --> RBUF
+        RBUF --> P2["폴링(전역 순서 보존)"]
+    end
+```
+
+> 콜백·폴링 구조는 둘이 비슷합니다. perf 는 `open_perf_buffer(콜백)` + `perf_buffer_poll()`, ring buffer 는 `open_ring_buffer(콜백)` + `ring_buffer_poll()` 입니다. 둘 다 사용자 공간이 **주기적으로 폴링**하면, 커널이 쌓아둔 이벤트를 꺼내 등록된 콜백을 호출합니다. 우리 VM 은 커널 6.17 이라 ring buffer 도 쓸 수 있지만, 실습②는 더 넓은 호환성을 위해 perf buffer 를 씁니다. "전역 순서가 꼭 필요하거나 메모리가 빠듯하면 ring buffer" 가 실무 선택의 요지입니다.
+
 ---
 
 ## 6. Python 쪽 — 맵 읽기 vs perf 폴링
@@ -223,6 +273,10 @@ bpf["target"][ctypes.c_int(0)] = ctypes.c_uint(want)    # 0번 칸에 기록
 ```
 
 > ctypes 주의: BCC 맵의 키·값은 C 타입이라 파이썬에서 `k.value`, `v.value` 처럼 **`.value`** 로 꺼냅니다. 주입할 땐 `ctypes.c_int(0)`, `ctypes.c_uint(...)` 로 **C 타입을 명시**합니다.
+
+> 왜 `.value` 인가: BCC 는 C 소스의 `struct key_t { u32 tgid; u32 syscall_id; }` 같은 정의를 읽어 **대응하는 ctypes 구조체 클래스를 자동 생성**합니다. 그래서 `k.tgid`·`k.syscall_id` 처럼 필드명으로 접근되고, 단일 `u64` 값은 `ctypes.c_ulong` 인스턴스라 실제 정수를 `.value` 로 꺼내는 것입니다. 즉 파이썬 객체가 C 메모리 레이아웃을 그대로 비춥니다 — 별도 직렬화 없이 커널 맵의 바이트를 파이썬에서 직접 해석합니다.
+
+**`BPF(text=...)` 한 줄이 하는 일.** 이 한 줄 안에서 (1) C 소스를 libbcc 가 **런타임 clang 으로 컴파일**하고, (2) 그 바이트코드를 `bpf()` 시스템콜로 커널에 **로드**하며, (3) 함수 이름 규칙(`kprobe__`, `TRACEPOINT_PROBE`)을 보고 프로브에 **부착**하고, (4) 선언된 맵들을 파이썬에서 `b["이름"]` 으로 쓸 수 있게 **노출**합니다. 그래서 `b = BPF(text=prog)` 가 끝나는 순간 이미 추적이 돌고 있습니다 — 이 "생성 즉시 부착" 성질이 [9주차](09주차_실습1_시스템콜_추적기.md) 실습①의 race 방어 설계(필터 게이트)와 직접 연결됩니다.
 
 ### 6-2. perf 버퍼 폴링 (스트리밍형, 실습②)
 
@@ -376,6 +430,42 @@ sudo python3 netflow.py --duration 10
 ```
 
 **과제 4. (비교 정리)** 실습①과 ②의 마지막 "데이터 내보내기" 한 줄을 나란히 적고, 왜 ①은 맵을, ②는 perf 이벤트를 골랐는지 2~3문장으로 설명하라.
+
+### 심화 과제 (목표 / 명령 / 관찰 / 질문)
+
+> `~/ebpf-labs/examples` 와 `~/ebpf-labs/labs` 의 BCC 도구를 직접 만지는 세트입니다. `ssh ossca-ebpf` 로 접속해 진행하세요.
+
+**심화 1. `hello_bcc.py` 실행하고 출력 부분 수정.**
+
+- 목표: 가장 작은 BCC 스크립트의 파이썬 출력부를 고쳐, "맵을 읽어 찍는" 부분이 어디인지 손으로 확인한다.
+- 명령:
+  ```bash
+  ls ~/ebpf-labs/examples/hello_bcc.py   # 없으면 1절 execve_count.py 로 대체
+  sudo python3 ~/ebpf-labs/examples/hello_bcc.py
+  ```
+  그런 다음 출력 형식을 바꾼다(예: `print(f"PID {k.value} ...")` 줄에 프로세스 이름이나 막대(`'#' * v.value`)를 추가).
+- 관찰: C 커널 코드는 그대로 두고 **파이썬 출력만** 바꿔도 결과 표현이 달라지는지 본다.
+- 질문: 커널 코드를 한 줄도 안 고치고 출력만 바꿀 수 있는 이유는? (집계는 커널, 표현은 사용자 공간이라는 역할 분리)
+
+**심화 2. `labs/` 도구 하나 코드 읽고 맵 키/값 바꿔보기.**
+
+- 목표: 기성 도구(예: `page_faults.py`)의 `BPF_HASH` 키를 바꿔 "다른 축으로 집계"한다.
+- 명령:
+  ```bash
+  ls ~/ebpf-labs/labs/
+  sed -n '1,80p' ~/ebpf-labs/labs/page_faults.py   # 맵 선언·키 구성 읽기
+  ```
+  키를 PID 기준에서 **comm(프로세스 이름) 기준**으로(또는 그 반대로) 바꾸고 다시 실행한다.
+- 관찰: 같은 이벤트가 키를 바꾸자 다른 그룹으로 묶여 출력되는지 본다.
+- 질문: 키에 `(pid, comm)` 을 둘 다 넣으면 무엇이 좋아지고, 맵 항목 수(메모리)는 어떻게 변하는가?
+
+**심화 3. (생각) 맵 집계 vs perf 스트리밍 — 언제 무엇.**
+
+- 목표: 두 방식의 선택을 구체적 상황에 대입해 본다.
+- 관찰/질문(코드 없이 글로 답):
+  1. "지난 1분간 어떤 프로세스가 디스크 I/O 시스템콜을 *총 몇 번* 했나" → 맵? perf?
+  2. "모든 TCP 연결을 *발생 시각·목적지 IP 와 함께 한 건도 빠짐없이* 로그로" → 맵? perf?
+  3. 2번을 perf 로 했는데 초당 이벤트가 폭증해 일부가 사라졌다. 어디를 손봐야 하나? (버퍼 크기, `lost_cb` 감시, 5-1 의 ring buffer 전환)
 
 ---
 

@@ -2,7 +2,7 @@
 
 > 이 강의의 컨셉 그대로다: **각 도구는 [🔬 eBPF로 무엇을 하는가] + [📖 배우는 운영체제 개념]** 짝으로 되어 있다.
 > 도구를 돌려 보면 프로세스·스케줄링·메모리·동기화·파일·네트워크·보안이 *실제로 어떻게 도는지* 눈에 보인다.
-> [examples/](../examples/)가 "한 줄 맛보기"라면, 여기는 **제대로 된 BCC 도구(Python+커널 C)** 11종이다.
+> [examples/](../examples/)가 "한 줄 맛보기"라면, 여기는 **제대로 된 BCC 도구(Python+커널 C)** 14종이다.
 
 last_updated: 2026-06-12
 
@@ -25,13 +25,16 @@ sudo python3 01_프로세스/proc_audit.py --duration 10
 |:---|:---|:---|:---|
 | 프로세스 | [proc_audit.py](01_프로세스/proc_audit.py) | exec, UID, 프로그램 실행 감사 (4–5장) | `tracepoint:sys_enter_execve` |
 | 프로세스 | [proc_lifetime.py](01_프로세스/proc_lifetime.py) | 프로세스 수명·종료, 짧은 수명 발견 | `sched:sched_process_exec/exit` |
+| 프로세스 | [signal_trace.py](01_프로세스/signal_trace.py) | 시그널·IPC, "누가 누구를 죽였나" | `tracepoint:signal:signal_generate` |
 | 스케줄러 | [runq_latency.py](02_스케줄러/runq_latency.py) | 런큐·컨텍스트 스위치·대기시간 (7–10장) | `sched:sched_wakeup/switch` |
 | 스케줄러 | [oncpu_time.py](02_스케줄러/oncpu_time.py) | CPU 점유 시간, 타임슬라이스 | `sched:sched_switch` |
+| 스케줄러 | [syscall_latency.py](02_스케줄러/syscall_latency.py) | 시스템콜 비용·지연 분포(히스토그램) | `tracepoint:raw_syscalls:sys_enter/exit` |
 | 메모리 | [page_faults.py](03_메모리/page_faults.py) | 페이지 폴트·가상메모리 (13–22장) | `software:page-faults` |
 | 메모리 | [mmap_size.py](03_메모리/mmap_size.py) | mmap/brk·주소공간 확장 | `tracepoint:sys_enter_mmap` |
 | 동기화 | [futex_contention.py](04_동기화/futex_contention.py) | 락·경합·블로킹 (28–33장) | `tracepoint:sys_enter/exit_futex` |
 | 파일 I/O | [vfs_rw.py](05_파일IO/vfs_rw.py) | VFS·읽기/쓰기 경로 (39–40장) | `kprobe:vfs_read/vfs_write` |
 | 파일 I/O | [open_audit.py](05_파일IO/open_audit.py) | 파일 디스크립터·open 플래그·inode | `tracepoint:sys_enter/exit_openat` |
+| 파일 I/O | [fsync_trace.py](05_파일IO/fsync_trace.py) | 영속성·내구성·저널링(fsync 비용) (42장) | `tracepoint:sys_enter/exit_fsync` |
 | 네트워크 | [conn_summary.py](06_네트워크/conn_summary.py) | TCP 연결·소켓·목적지 | `kprobe:tcp_v4_connect` |
 | 보안 | [file_guard.py](07_보안/file_guard.py) | 접근 제어·런타임 위협 탐지 | `tracepoint:sys_enter_openat` |
 

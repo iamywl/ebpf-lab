@@ -128,6 +128,14 @@ eBPF 프로그램은 흔히 커널 내부 구조체(예: `struct task_struct`, `
 
 예를 들어 어떤 필드 `oom_score_adj` 의 위치(오프셋)가 커널 A 에서는 구조체 시작부터 24바이트째, 커널 B 에서는 32바이트째라고 합시다. 전통적인 방식은 컴파일할 때 **그 커널의 헤더에서 오프셋을 박아 넣습니다(하드코딩)**. 그러면 커널 A 용으로 컴파일한 eBPF 를 커널 B 에서 로드하면 엉뚱한 바이트를 읽게 됩니다.
 
+> 🔬 **왜 오프셋이 커널마다 달라지나 — 구체적으로**: `struct task_struct` 같은 큰 구조체는 수백 개의 필드로 이뤄집니다. 그 레이아웃은 다음 이유로 빌드마다 달라집니다.
+>
+> - **앞쪽 필드가 추가/삭제됨**: 새 커널이 `oom_score_adj` *앞에* 새 필드를 하나 끼워 넣으면, 그 뒤의 모든 필드 오프셋이 밀려납니다.
+> - **`CONFIG_*` 빌드 옵션**: 어떤 필드는 특정 설정(`#ifdef CONFIG_...`)일 때만 구조체에 들어갑니다. 같은 커널 버전이라도 배포판이 켠 옵션이 다르면 레이아웃이 달라집니다.
+> - **타입 크기·정렬**: 컴파일러 정렬 규칙이나 필드 타입 변경으로 중간에 패딩이 달라질 수 있습니다.
+>
+> 즉 "커널 버전"만 같다고 레이아웃이 같다는 보장이 없습니다. **그 빌드의 실제 레이아웃**을 알아야만 올바른 오프셋을 쓸 수 있고, 그 정보를 담은 것이 바로 다음 절의 BTF 입니다.
+
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
 flowchart TB
@@ -190,6 +198,30 @@ flowchart TB
 
 > 비유: 이사 갈 때 "TV 는 거실 벽에서 24cm" 라고 못 박아 적어두면(헤더 방식) 새 집에서 틀어집니다. 대신 "TV 는 *거실 콘센트 옆*" 처럼 **상대 위치만 적어두고**, 새 집에 도착해서 *그 집의 콘센트 위치(BTF)* 를 보고 맞추면(CO-RE) 어느 집이든 들어맞습니다.
 
+### 6.1 CO-RE 재배치의 종류 — 오프셋만이 아니다
+
+CO-RE 가 로드 시점에 교정하는 것은 "필드 오프셋" 하나가 아닙니다. 커널 차이를 흡수하기 위한 **여러 종류의 재배치(relocation)** 가 있습니다.
+
+| 재배치 종류 | 무엇을 해결하나 | 예 |
+|:---|:---|:---|
+| **필드 오프셋(field offset)** | 같은 필드가 커널마다 몇 바이트째인지 다름 | `task->oom_score_adj` 위치가 24 ↔ 32 |
+| **필드 존재 여부(field existence)** | 어떤 커널엔 그 필드가 아예 없음 | "이 필드가 있으면 읽고, 없으면 건너뛰기" 분기 |
+| **필드 크기(field size)** | 같은 필드의 타입·폭이 커널마다 다름 | `u32` ↔ `u64` 로 바뀐 필드 |
+| **타입 존재/ID** | 구조체·enum 자체가 있는지, enum 값이 바뀜 | 새 커널에만 있는 구조체 참조 |
+
+핵심은 **필드 존재 여부** 재배치입니다. 이게 있어서, 신·구 커널을 모두 지원하는 프로그램을 "이 필드가 있는 커널에서는 이렇게, 없는 커널에서는 저렇게" 식으로 **하나의 바이너리 안에서 분기**할 수 있습니다. 단순 오프셋 교정을 넘어, *구조 자체의 차이*까지 흡수하는 것이 CO-RE 의 힘입니다.
+
+### 6.2 `vmlinux.h` — 커널 전체 타입을 하나의 헤더로
+
+libbpf+CO-RE 로 코드를 짤 때는 커널 헤더 수십 개를 `#include` 하는 대신, **커널 BTF 에서 뽑아낸 단 하나의 헤더 `vmlinux.h`** 를 포함합니다. 생성 방법은 간단합니다.
+
+```bash
+# (VM 안에서) 현재 커널의 BTF → 모든 커널 타입을 담은 헤더 한 장으로
+sudo bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
+```
+
+이 한 줄이 의미하는 바가 큽니다. **커널 소스 헤더를 따로 설치할 필요가 없습니다** — 지금 돌고 있는 커널이 BTF 로 자기 타입을 다 알려주니, 그걸 그대로 헤더로 받아 적는 것이죠. 그리고 `vmlinux.h` 에 적힌 오프셋은 컴파일 결과에 *박히지 않습니다*. 컴파일러(clang)가 CO-RE 재배치 표시만 남기고, 실제 오프셋은 6절에서 본 대로 로드 시점에 채워지기 때문입니다. 그래서 "개발 PC 의 `vmlinux.h` 로 빌드한 바이너리"가 "오프셋이 다른 운영 서버 커널"에서도 동작합니다.
+
 ---
 
 ## 7. BCC vs libbpf+CO-RE — 두 가지 길 맛보기
@@ -218,6 +250,10 @@ flowchart LR
 | 본 랩에서 | 실습①·② ([9](09주차_실습1_시스템콜_추적기.md)·[10주차](10주차_실습2_네트워크_연결_추적기.md)) | [11주차](11주차_libbpf와_CO-RE_프로덕션eBPF.md) |
 
 선택 기준을 한 줄로: **빠르게 배우고 탐색할 땐 BCC, 운영 환경에 작고 빠르게 배포할 땐 libbpf+CO-RE.** 둘 다 같은 BTF 인프라 위에서 돌지만, *언제 컴파일하느냐* 가 핵심 차이입니다.
+
+> 🔬 **왜 BCC 는 "무겁다"고 하나**: BCC 는 실행 시점에 C 소스를 컴파일해야 하므로, 배포물 안에 **LLVM/clang 한 벌을 통째로** 끌고 다닙니다(수백 MB 규모). 게다가 컴파일 순간에 그 머신의 **커널 헤더가 있어야** 구조체를 풀 수 있습니다 — 헤더가 없거나 버전이 어긋나면 그 자리에서 컴파일이 실패합니다. 매 실행마다 컴파일하니 시작도 느립니다. 반대로 **libbpf+CO-RE** 는 개발 PC 에서 **딱 한 번 미리 컴파일**해 작은 단일 바이너리를 만들고, 실행 머신엔 **BTF 만 있으면** 됩니다(헤더·컴파일러 불필요). 그래서 운영 서버 수천 대처럼 "커널 버전이 제각각이고 빌드 도구를 깔기 싫은" 환경에 적합합니다.
+>
+> 정리하면, BTF 라는 같은 토대 위에서 ① BCC 는 *그 머신의 헤더로 매번 새로 컴파일해* 정확성을 얻고, ② libbpf+CO-RE 는 *재배치 표시를 남긴 뒤 로드 시점에 BTF 로 교정해* 이식성을 얻습니다. "정확성을 그 자리에서 다시 빌드해 확보 vs 이식성을 재배치로 확보"가 두 길의 본질입니다.
 
 ---
 
@@ -289,15 +325,28 @@ python3 -c "import bcc; print('BCC import OK')"
 
 기대: 커널 6.17, `/sys/kernel/btf/vmlinux` 존재, bpftrace 0.20.x, clang 18, BCC import 성공.
 
-**과제 2. 커널 BTF 들여다보기.** 커널 타입 정보가 실제로 들어 있음을 눈으로 확인하라.
+**과제 2. 커널 BTF 에서 `struct task_struct` 필드 탐색하기.** 커널 타입 정보가 실제로 들어 있음을 눈으로 확인하라.
+
+- **목표**: BTF 가 "구조체·필드·오프셋"을 담는다(5절)를 가장 큰 구조체 `task_struct` 로 직접 본다.
+- **명령**:
+  ```bash
+  # (VM 안에서) bpftool 이 없으면 먼저: sudo apt-get install -y bpftool
+  uname -r                               # 지금 커널 버전 (이 BTF 가 어느 커널 것인지)
+  sudo bpftool btf dump file /sys/kernel/btf/vmlinux format c | grep -A20 'struct task_struct'
+  ```
+- **관찰**: 맨 처음엔 `struct task_struct;` (전방 선언)만 보일 수 있습니다. 필드가 가득한 **본 정의**는 덤프 뒤쪽에 나오므로, 정의 본문을 보려면 페이저로 넘겨 보세요: `sudo bpftool btf dump file /sys/kernel/btf/vmlinux format c | sed -n '/^struct task_struct {/,/^};/p' | head -60`. 거기서 `pid`, `comm`, `oom_score_adj` 같은 필드가 줄줄이 나옵니다. 이 필드 순서·구성이 곧 "이 커널 빌드의 실제 레이아웃"이며, 4절에서 본 대로 **다른 커널이면 이 순서가 달라질 수 있습니다**. 같은 방식으로 `struct sock` 도 찾아보세요.
+
+`struct task_struct` 정의가 보이면, 이 커널이 자기 구조체 레이아웃을 BTF 로 노출하고 있다는 증거다.
+
+**과제 2-b. BTF 파일 자체 확인하기.** CO-RE 지원의 핵심 신호인 파일이 실제로 있는지 본다.
 
 ```bash
-# bpftool 이 있으면 (없으면 sudo apt-get install -y bpftool 후)
-sudo bpftool btf dump file /sys/kernel/btf/vmlinux format c 2>/dev/null | head -n 30
-sudo bpftool btf dump file /sys/kernel/btf/vmlinux format c 2>/dev/null | grep -m1 'struct sock '
+# (VM 안에서)
+uname -r
+ls -la /sys/kernel/btf/vmlinux
 ```
 
-`struct sock` 정의가 보이면, 이 커널이 자기 구조체 레이아웃을 BTF 로 노출하고 있다는 증거다.
+기대: 커널 6.17, `/sys/kernel/btf/vmlinux` 파일이 존재(크기가 수 MB). 이 파일이 있다는 것 자체가 "이 커널은 CO-RE 를 지원한다"의 신호다(2절·5절).
 
 **과제 3. 본 랩 from-zero 런북 한 번 돌리기.** 저장소 루트 [README](../../README.md) 의 "강의 7. 처음부터 한 번에 따라하기" 블록을 Mac 터미널에서 그대로 실행해, 실습①·②의 자기검증이 "검증 통과" 로 끝나는지 확인하라.
 
@@ -309,7 +358,13 @@ ssh ossca-ebpf 'cd ~/ebpf-labs/projects/syscall-tracer && sudo python3 verify.py
 ssh ossca-ebpf 'cd ~/ebpf-labs/projects/netflow-tracer && sudo python3 verify_net.py'
 ```
 
-**과제 4. (생각해 보기)** 과제 3 의 실습은 BCC 기반이다(런타임 컴파일). 만약 VM 에서 clang 을 지워버리면 어떤 일이 생길지 예상해 보고, libbpf+CO-RE 였다면 그 영향이 어떻게 달라질지 한 문단으로 적어라. *(주의: 실제로 clang 을 지우지는 말 것 — 실습 환경이 망가집니다.)*
+**과제 4. (생각해 보기) — clang 이 없다면?** 과제 3 의 실습은 BCC 기반이다(런타임 컴파일). 만약 VM 에서 clang 을 지워버리면 어떤 일이 생길지 예상해 보고, libbpf+CO-RE 였다면 그 영향이 어떻게 달라질지 한 문단으로 적어라. *(주의: 실제로 clang 을 지우지는 말 것 — 실습 환경이 망가집니다.)*
+
+**과제 5. (생각해 보기) — BTF 가 없다면 무엇이 불가능한가?** 과제 2-b 에서 본 `/sys/kernel/btf/vmlinux` 가 *없는* 커널(`CONFIG_DEBUG_INFO_BTF` 가 꺼진 커널)을 가정하라.
+
+- **질문 1**: libbpf+CO-RE 도구가 그 커널에서 동작하기 어려운 이유는? (로더가 오프셋을 "어디에 물어보는지"를 5·6절과 연결)
+- **질문 2**: 과제 2 처럼 `bpftool btf dump` 로 구조체를 들여다보는 일, 6.2절의 `vmlinux.h` 생성은 그 커널에서 가능할까?
+- **질문 3**: 그렇다면 BTF 없는 커널에서도 BCC(런타임 컴파일·커널 헤더 사용)는 왜 상대적으로 덜 막히는가? 한 문단으로 정리하라.
 
 ---
 

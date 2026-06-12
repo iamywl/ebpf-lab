@@ -40,6 +40,26 @@ flowchart LR
 
 > 비유: bpftrace 의 `@[comm] = count()` 는 awk 의 `arr[$1]++` 와 거의 같은 감각입니다. "어떤 키별로 세어 모은다" 는 발상이 똑같습니다.
 
+**한 줄이 커널까지 가는 길 — bpftrace 내부 동작.** bpftrace 가 "마법"처럼 보이지만, 우리가 [4주차](04주차_eBPF_아키텍처_검증기_JIT_맵_헬퍼.md)에서 배운 파이프라인을 자동화한 것뿐입니다. 우리가 친 한 줄은 다음 단계를 거칩니다.
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
+flowchart LR
+    A["한 줄 스크립트\n(텍스트)"] -->|"파싱·의미분석"| B["AST"]
+    B -->|"코드 생성"| C["LLVM IR"]
+    C -->|"LLVM BPF 백엔드"| D["eBPF 바이트코드"]
+    D -->|"bpf() 시스템콜\n로드·부착"| E["검증기 → JIT → 훅"]
+    E -->|"맵 / 출력"| F["bpftrace 사용자 공간"]
+```
+
+1. bpftrace 가 스크립트를 **파싱**해 추상 구문 트리(AST)를 만들고,
+2. 이를 **LLVM IR** 로 코드 생성한 뒤,
+3. **LLVM BPF 백엔드**로 eBPF 바이트코드를 뽑고,
+4. `bpf()` 시스템콜로 커널에 **로드**하면 검증기·JIT 를 거쳐 프로브에 **부착**되며,
+5. 실행 중 모인 맵을 bpftrace 가 읽어 **출력**합니다.
+
+> 즉 bpftrace 도 BCC 처럼 내부에서 **LLVM 으로 eBPF 를 생성**합니다. 차이는 "C 를 직접 쓰느냐(BCC)" vs "고수준 한 줄 언어를 bpftrace 가 대신 IR 로 바꿔주느냐"입니다. 컴파일은 `bpftrace` 실행 시점에 일어나므로, 첫 실행이 잠깐 느린 것도 이 때문입니다.
+
 먼저 VM 에서 버전을 확인하고, 어떤 프로브가 있는지 목록을 살펴봅니다.
 
 ```bash
@@ -130,6 +150,60 @@ bpftrace 는 자주 쓰는 값을 미리 변수로 줍니다.
 | `args` | 프로브 인자 구조체 (`args.filename` 등) |
 | `retval` | (kretprobe/return) 함수 반환값 |
 | `cpu` | 현재 CPU 번호 |
+
+위 표 외에도 자주 쓰는 빌트인 변수가 더 있습니다. 한 번에 정리해 둡니다.
+
+| 변수 | 의미 | 비고 |
+|:---|:---|:---|
+| `uid` | 사용자 ID | `uid == 0` 으로 root 만 거르기 |
+| `elapsed` | bpftrace 시작 후 경과 나노초 | `nsecs`(부팅 기준)와 달리 **실행 시작 기준** |
+| `cpu` | 현재 CPU 번호 | per-CPU 분포·NUMA 관찰 |
+| `arg0`, `arg1`, ... | kprobe/uprobe 의 **원시 인자**(레지스터) | 타입이 없으므로 캐스팅 필요 |
+| `args` | tracepoint/일부 probe 의 **타입 있는 인자 구조체** | `args.filename` 처럼 필드 접근 |
+| `retval` | (kretprobe/uretprobe) 함수 반환값 | 음수면 보통 `-errno` |
+| `func` | 현재 프로브가 붙은 함수 이름 | 와일드카드 프로브에서 유용 |
+| `probe` | 현재 프로브 전체 이름 문자열 | 어떤 프로브가 찍혔는지 식별 |
+
+> `arg0` vs `args` 구분이 중요합니다. `kprobe:` 에는 타입 정보가 없어 `arg0`(첫 인자 레지스터 값)을 직접 받아 `(struct file *)arg0` 처럼 **캐스팅**해 씁니다. 반면 `tracepoint:` 는 커널이 인자 포맷을 공개하므로 `args.<필드>` 로 **타입 안전하게** 읽습니다(예: `args.id`, `args.filename`). 그래서 안정성뿐 아니라 사용 편의에서도 tracepoint 가 유리합니다.
+
+**필터·삼항·문자열·구조체 접근.** action 안에서 awk 처럼 조건 분기를 쓸 수 있습니다.
+
+```bash
+# 삼항 연산자: 읽기 성공/실패를 한 줄로 분류
+sudo bpftrace -e '
+tracepoint:syscalls:sys_exit_read {
+    @[args.ret >= 0 ? "ok" : "err"] = count();
+}'
+```
+
+```bash
+# 커널 구조체 접근: kprobe 인자를 캐스팅해 필드를 따라간다
+sudo bpftrace -e '
+kprobe:vfs_open {
+    $path = (struct path *)arg0;
+    printf("open dentry=%s\n", str($path->dentry->d_name.name));
+}'
+```
+
+> `str()` 은 커널/사용자 메모리의 **널 종료 문자열**을 안전하게 읽어 옵니다. `$path` 처럼 `$` 로 시작하는 것은 **스크래치 지역 변수**(맵 `@` 와 달리 출력되지 않고 이벤트 처리 동안만 삽니다). `->` 로 구조체 필드를 따라가면 bpftrace 가 내부적으로 `bpf_probe_read_kernel` 헬퍼 호출로 바꿔 줍니다.
+
+집계 함수도 표보다 더 있습니다. `stats(x)` 는 count·avg·total 을 한 번에 주고, `min`/`max` 와 함께 분포의 양 끝을 잡습니다.
+
+| 추가 집계 | 하는 일 |
+|:---|:---|
+| `stats(x)` | count·평균·합계를 한 번에 요약 |
+| `delete(@m[key])` | 맵 항목 제거(지연 측정의 짝 맞춤) |
+| `clear(@m)` | 맵 전체 비우기(주기 출력 후 리셋) |
+| `print(@m)` / `print(@m, n)` | 맵(상위 n개) 즉시 출력 |
+
+**확률적 샘플링 — `profile:hz`.** 모든 이벤트를 잡는 대신 **고정 주파수로 표본만** 뜨면, 부하를 크게 낮추면서 "어디서 시간을 쓰나"를 통계적으로 알 수 있습니다.
+
+```bash
+# 모든 CPU 에서 초당 99회 스택을 표집 → 어떤 함수가 자주 잡히나(=CPU 점유)
+sudo bpftrace -e 'profile:hz:99 { @[comm] = count(); }'
+```
+
+> 99Hz 처럼 100의 약수를 피한 **소수에 가까운 주파수**를 쓰는 관행이 있습니다. 100Hz 같은 값은 100Hz 로 도는 커널 타이머와 박자가 겹쳐(lockstep) 특정 작업만 반복 표집되는 **에일리어싱**을 일으킬 수 있어서입니다. 표집은 전수 측정이 아니므로 결과는 "비율의 추정치"로 읽습니다.
 
 지연(latency) 측정의 기본 패턴 — `nsecs` 로 진입·반환 시각을 빼면 함수가 얼마나 걸렸는지 알 수 있습니다.
 
@@ -317,6 +391,46 @@ tracepoint:raw_syscalls:sys_exit /@start[tid]/ {
 ```
 
 **과제 5. TCP 연결 카운트.** 6-6 을 켜둔 채 다른 창에서 `curl --max-time 2 http://127.0.0.1:22` 를 몇 번 실행하고, `curl` 프로세스의 연결 시도 수가 올라가는지 확인하라. *(이 과제는 실습②의 예고편입니다.)*
+
+### 심화 과제 (목표 / 명령 / 관찰 / 질문)
+
+> 아래는 `~/ebpf-labs/examples` 의 `.bt` 스크립트와 직접 작성을 결합한 심화 세트입니다. `ssh ossca-ebpf` 로 접속해 진행하세요.
+
+**심화 1. examples 의 `.bt` 5개 실행·해석.**
+
+- 목표: 미리 준비된 bpftrace 스크립트를 읽고 돌려, probe/filter/action 구조를 실제 코드에서 식별한다.
+- 명령:
+  ```bash
+  ls ~/ebpf-labs/examples/*.bt
+  # 임의의 5개를 골라 차례로
+  sudo bpftrace ~/ebpf-labs/examples/<파일>.bt
+  ```
+- 관찰: 각 스크립트가 어떤 probe 에 붙고, 출력이 **집계형**(종료 시 한 번에)인지 **스트리밍형**(줄 단위 실시간)인지 분류한다.
+- 질문: 5개 중 `tracepoint:` 를 쓴 것과 `kprobe:` 를 쓴 것을 가려내고, 둘 중 커널 업그레이드에 더 강한 쪽과 그 이유를 한 줄로 적어라.
+
+**심화 2. 원라이너 직접 작성 — 특정 프로세스의 `openat` 만 세기.**
+
+- 목표: 빌트인 변수(`comm`)와 필터(`/.../`), 맵 `count()` 를 결합해 **내가 원하는 질문**을 한 줄로 표현한다.
+- 명령(예시는 `bash` 대상, 자기 셸 이름에 맞게 바꿔라):
+  ```bash
+  sudo bpftrace -e '
+  tracepoint:syscalls:sys_enter_openat /comm == "bash"/ { @[comm] = count(); }'
+  ```
+- 관찰: 다른 창에서 그 셸로 파일을 여는 명령(`cat`, `ls` 등)을 실행하며 카운트가 오르는지 본다.
+- 질문: 필터를 `comm` 이 아니라 `pid == <특정PID>` 로 바꾸면 어떤 점이 더 정확해지는가? (힌트: 같은 이름의 프로세스가 여럿일 때)
+
+**심화 3. `hist()` 로 직접 지연 히스토그램 작성.**
+
+- 목표: 6-5 를 참고하되, **특정 시스템콜 하나**(예: `read`)의 지연만 히스토그램으로 만든다.
+- 명령:
+  ```bash
+  sudo timeout 10 bpftrace -e '
+  tracepoint:syscalls:sys_enter_read  { @start[tid] = nsecs; }
+  tracepoint:syscalls:sys_exit_read /@start[tid]/ {
+      @read_ns = hist(nsecs - @start[tid]); delete(@start[tid]); }'
+  ```
+- 관찰: 막대가 가장 긴 나노초 구간(최빈 구간)과, 오른쪽으로 길게 늘어진 꼬리(느린 read)가 있는지 본다.
+- 질문: 같은 데이터를 `hist()` 대신 `avg()` 로만 보면 무엇을 놓치게 되는가? (분포 vs 단일 평균)
 
 ---
 

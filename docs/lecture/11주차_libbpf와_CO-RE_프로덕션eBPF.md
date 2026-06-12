@@ -194,6 +194,8 @@ int trace_connect(struct pt_regs *ctx) {
 }
 ```
 
+> 🔎 **심화 — ring buffer 가 순서를 보존하는 원리.** perf buffer 는 **CPU마다 별도 버퍼**라, 서로 다른 CPU 에서 거의 동시에 발생한 두 이벤트의 전역 시간 순서를 사용자 공간에서 재구성하기 어렵다(각 버퍼를 따로 빼내므로). ring buffer 는 **모든 CPU 가 하나의 공유 버퍼**에 쓰되, 내부적으로 **원자적 예약(reserve)** 으로 자리를 먼저 잡고 데이터를 채운 뒤 **commit** 한다. 자리 예약 순서가 곧 소비 순서가 되므로 전역 시간 순서가 자연스럽게 보존된다. 또 `reserve` 가 버퍼 안의 공간을 직접 내주므로, 이벤트를 임시 변수에 만들었다가 다시 복사하던 **복사 한 번을 절약**한다(perf 의 `perf_submit` 대비). 단점은 단일 버퍼라 극단적 다중 CPU 부하에서 경합이 생길 수 있다는 점 — 그래도 대부분의 추적기에선 ring buffer 가 기본 선택이다.
+
 > 우리 10주차 실습②(netflow-tracer)는 BCC 위에서 perf buffer 류로 이벤트를 올렸다. libbpf 로 다시 쓴다면 같은 추적기를 ring buffer 로 만들어 **clang 없는 단일 바이너리**로 배포할 수 있다 — 이것이 "프로덕션화"의 실제 모습이다.
 
 ---
@@ -283,20 +285,35 @@ sudo bpftool prog dump xlated id <ID> | head -30   # 검증 통과 바이트코�
 
 # JSON 으로도 출력해 보기
 sudo bpftool prog show --json | head -40
+
+# 이 커널이 지원하는 eBPF 기능 점검 (맵·프로그램·헬퍼 타입)
+sudo bpftool feature probe | head -40
 ```
 
-**관찰 질문:** ① `prog show` 에 보이는 프로그램의 `type` 은 무엇인가(kprobe?)? ② `map show` 에서 ring buffer/perf 류 맵이 보이는가? ③ 프로그램 하나가 어떤 맵을 참조하는지 추적해 보자(`prog show id <ID>` 의 `map_ids`).
+**관찰 질문:** ① `prog show` 에 보이는 프로그램의 `type` 은 무엇인가(kprobe?)? ② `map show` 에서 ring buffer/perf 류 맵이 보이는가? ③ 프로그램 하나가 어떤 맵을 참조하는지 추적해 보자(`prog show id <ID>` 의 `map_ids`). ④ `feature probe` 출력에서 `BPF_MAP_TYPE_RINGBUF` 가 supported 로 나오는가(= 이 커널에서 ring buffer 사용 가능)?
 
 ### 과제 B. BTF 와 vmlinux.h 확인 (필수)
 
 ```bash
 ls -l /sys/kernel/btf/vmlinux          # BTF 존재 확인
+
+# 생성될 헤더의 첫머리를 먼저 눈으로 확인 (라이선스·기본 타입 정의가 보인다)
+sudo bpftool btf dump file /sys/kernel/btf/vmlinux format c | head -30
+
 sudo bpftool btf dump file /sys/kernel/btf/vmlinux format c > /tmp/vmlinux.h
 wc -l /tmp/vmlinux.h                    # 생성된 헤더 줄 수(수만 줄일 것)
 grep -m1 "struct task_struct {" /tmp/vmlinux.h && echo "task_struct 정의 발견!"
 ```
 
-> 이 한 파일이 "커널 헤더 패키지 없이도 모든 커널 타입을 쓸 수 있게" 해 준다는 점을 직접 확인하라.
+> 이 한 파일이 "커널 헤더 패키지 없이도 모든 커널 타입을 쓸 수 있게" 해 준다는 점을 직접 확인하라. `head -30` 으로 본 앞부분과 `wc -l` 로 본 전체 규모(수만 줄)의 대비가, 왜 BCC 처럼 헤더 수십 개를 일일이 include 하는 대신 BTF 단일 헤더를 쓰는지를 보여 준다.
+
+### 과제 D. (생각) 왜 프로덕션은 libbpf 인가 (필수)
+
+위 관찰을 근거로, 다음을 한 단락씩 정리하라.
+
+- **배포물**: `feature probe`·`btf dump` 가 대상 머신에서 바로 됐다는 건, 이 커널에 **BTF 가 이미 있다**는 뜻이다. 그렇다면 대상 머신에 clang·커널 헤더 없이 미리 컴파일된 `.bpf.o` 만 들고 가도 되는 이유는?
+- **규모**: 1,000대 노드에 BCC 로 배포하면 각 노드가 부팅 때마다 clang 으로 런타임 컴파일한다. libbpf 로 바꾸면 무엇이 사라지고(컴파일 비용·LLVM 의존·메모리), 기동 속도는 어떻게 달라지나?
+- **이식성**: 커널 버전이 노드마다 조금씩 다를 때, BCC 는 "머신마다 재컴파일"로, libbpf+CO-RE 는 "로드 시 BTF 재배치"로 해결한다. 후자가 운영상 더 단순한 이유는?
 
 ### 과제 C. (도전) libbpf 예제 빌드 맛보기 (선택)
 
