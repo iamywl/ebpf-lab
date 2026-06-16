@@ -170,7 +170,7 @@ int main(void) {
 
 ## 6. ring buffer vs perf buffer: 이벤트를 사용자 공간으로
 
-eBPF 프로그램이 커널에서 잡은 이벤트(예: "PID 1234 가 8.8.8.8 에 연결")를 사용자 공간으로 올려 보내려면 전용 맵이 필요하다. 전통적으로 **perf buffer** 를 썼지만, 커널 5.8 부터 **ring buffer(`BPF_MAP_TYPE_RINGBUF`)** 가 추가되어 요즘 프로덕션 표준이 됐다.
+eBPF 프로그램이 커널에서 잡은 이벤트(예: "PID 1234 가 8.8.8.8 에 연결")를 사용자 공간으로 올려 보내려면 전용 맵이 필요하다. 전통적으로 **perf buffer**(리눅스 `perf` 서브시스템 위에서 동작하는, **CPU마다 하나씩** 둔 per-CPU 링 버퍼)를 썼지만, 커널 5.8 부터 **ring buffer(`BPF_MAP_TYPE_RINGBUF`)**(모든 CPU가 공유하는 단일 버퍼)가 추가되어 요즘 프로덕션 표준이 됐다.
 
 | 구분 | perf buffer (`BPF_MAP_TYPE_PERF_EVENT_ARRAY`) | ring buffer (`BPF_MAP_TYPE_RINGBUF`) |
 |:---|:---|:---|

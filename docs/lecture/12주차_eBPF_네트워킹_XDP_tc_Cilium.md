@@ -121,7 +121,7 @@ char _license[] SEC("license") = "GPL";
 
 ## 3. tc / clsact eBPF: 양방향 트래픽 제어
 
-XDP 가 "들어오는 패킷의 최전선"이라면, **tc(traffic control) eBPF** 는 `sk_buff` 가 만들어진 뒤 **ingress(수신)와 egress(송신) 양쪽**에 붙어 트래픽을 제어한다. `clsact` 라는 큐 디시플린(qdisc)에 eBPF 분류기를 달아 쓴다.
+XDP 가 "들어오는 패킷의 최전선"이라면, **tc(traffic control) eBPF** 는 `sk_buff` 가 만들어진 뒤 **ingress(수신)와 egress(송신) 양쪽**에 붙어 트래픽을 제어한다. `clsact` 라는 큐 디시플린(qdisc — 커널이 패킷을 큐에 넣고 빼는 순서를 관리하는 트래픽 제어 계층)에 eBPF 분류기를 달아 쓴다. clsact 는 기존 ingress 전용 qdisc 와 달리 **ingress·egress 양쪽 가상 훅을 한 번에** 제공하는 특수 qdisc 라, 수신·송신 트래픽을 같은 방식으로 다룰 수 있다.
 
 | 구분 | XDP | tc / clsact eBPF |
 |:---|:---|:---|
@@ -161,7 +161,7 @@ eBPF 훅은 스택 위쪽에도 있다. 이들은 패킷 단위라기보다 **�
 
 ## 5. Cilium: eBPF 로 만든 쿠버네티스 네트워킹
 
-지금까지의 훅(XDP·tc·소켓·cgroup)을 한데 엮어 **쿠버네티스 네트워킹**을 통째로 구현한 대표 프로젝트가 **Cilium** 이다. Cilium 은 CNCF 의 졸업(Graduated) 프로젝트로, 쿠버네티스의 **CNI(Container Network Interface) 플러그인**으로 널리 쓰인다.
+지금까지의 훅(XDP·tc·소켓·cgroup)을 한데 엮어 **쿠버네티스 네트워킹**을 통째로 구현한 대표 프로젝트가 **Cilium** 이다. Cilium 은 CNCF 의 졸업(Graduated) 프로젝트로, 쿠버네티스의 **CNI(Container Network Interface) 플러그인**으로 널리 쓰인다. CNI 는 쿠버네티스가 새로 뜨는 파드에 네트워크(IP 할당·라우팅·정책)를 붙여 주는 표준 인터페이스이고, Cilium 은 그 구현을 eBPF 로 만든 것이다.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%

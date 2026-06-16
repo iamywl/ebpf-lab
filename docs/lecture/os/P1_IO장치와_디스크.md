@@ -26,6 +26,8 @@ OSTEP 3부(영속성)는 "데이터를 어떻게 사라지지 않게 저장하�
 
 ### 📖 OSTEP에서는
 
+이 주제가 왜 나왔는지부터 보자. CPU는 매우 빠른데 디스크는 매우 느리다. 그래서 CPU가 디스크를 기다리며 멈춰 있으면 그 시간만큼 낭비가 크다. 처음 쓰던 방법은 폴링(polling — CPU가 "끝났니?"를 계속 물어보며 상태를 확인)이었는데, 묻는 동안 CPU를 다른 일에 못 써서 낭비가 똑같이 크다. 이를 개선한 것이 인터럽트(interrupt — 장치가 일을 끝내면 CPU에 신호를 보내 알림)다. CPU는 기다리는 동안 다른 일을 하다가 신호를 받으면 처리한다. 데이터 전송 자체는 DMA(Direct Memory Access — 장치가 CPU를 거치지 않고 직접 메모리와 데이터를 주고받음)가 맡는다. 다만 트레이드오프가 있다. NVMe 같은 매우 빠른 장치에서는 인터럽트 처리 비용이 오히려 커져서, 폴링과 인터럽트를 섞는 하이브리드나 인터럽트 합병(coalescing — 여러 완료를 모아 한 번에 알림)을 쓴다.
+
 OSTEP 36장은 장치와 CPU가 대화하는 방법을 설명한다. 장치에는 **상태(status)·명령(command)·데이터(data)** 레지스터가 있고, OS는 이 레지스터를 읽고 쓰며 장치를 제어한다. 핵심 질문은 "느린 장치가 작업을 끝낼 때까지 CPU가 어떻게 기다리느냐"다.
 
 - **폴링(polling):** CPU가 상태 레지스터를 반복해서 들여다본다. 간단하지만 CPU를 낭비한다.
@@ -56,7 +58,7 @@ sudo cat /sys/kernel/debug/tracing/available_events | grep '^block:'
 
 ### 📖 OSTEP에서는
 
-37장은 하드디스크의 물리 구조(플래터·트랙·섹터·헤드)와 **접근시간 공식**을 가르친다.
+37장은 하드디스크의 물리 구조(플래터·트랙·섹터(sector — 디스크가 읽고 쓰는 고정 크기 단위, 보통 512B~4KB)·헤드)와 **접근시간 공식**을 가르친다.
 
 ```text
 I/O 시간 = 탐색시간(seek) + 회전지연(rotation) + 전송시간(transfer)
@@ -88,6 +90,7 @@ OSTEP은 `disk.py` 시뮬레이터로 이를 체험하게 한다. 헤드 위치,
 sudo biolatency-bpfcc
 
 # 터미널 2: 디스크 I/O 유발 (1MB 블록 200개 쓰기)
+# oflag=direct: 페이지 캐시를 우회해 디스크와 곧장 주고받는 direct I/O
 dd if=/dev/zero of=/tmp/testfile bs=1M count=200 oflag=direct
 sync
 # 끝나면 터미널 1에서 Ctrl-C → 히스토그램 출력
@@ -166,7 +169,7 @@ dd if=/dev/zero of=/tmp/raidtest bs=1M count=50 oflag=direct; sync
 
 > 위 OS 개념을 eBPF로 어떻게 잡는지 실제 도구 코드를 직접 본다.
 
-앞에서 쓴 `biolatency`는 편리한 완성품이지만, 그 안에서 무슨 일이 일어나는지는 가려져 있다. 사실 그 핵심은 **블록 추적점 두 개 사이의 시간을 재는 것**(34절에서 짚은 `block_rq_issue` → `block_rq_complete`)뿐이다. 그 알맹이를 짧은 `bpftrace` 한 토막으로 직접 써 본다. (아래는 개념을 보여주는 **예시** 스니펫이다 — `biolatency`의 축약판이라고 보면 된다.)
+앞에서 쓴 `biolatency`는 편리한 완성품이지만, 그 안에서 무슨 일이 일어나는지는 가려져 있다. 사실 그 핵심은 **블록 추적점 두 개 사이의 시간을 재는 것**(1절에서 본 `block_rq_issue` → `block_rq_complete`)뿐이다. 그 알맹이를 짧은 `bpftrace` 한 토막으로 직접 써 본다. (아래는 개념을 보여주는 **예시** 스니펫이다 — `biolatency`의 축약판이라고 보면 된다.)
 
 ### ① 커널에서 도는 부분 (bpftrace = eBPF C 축약)
 
@@ -185,7 +188,7 @@ tracepoint:block:block_rq_complete
 }
 ```
 
-- **부착(발행)** `tracepoint:block:block_rq_issue`: 블록 요청이 장치로 **발행되는 순간**. 36장의 "장치가 일을 시작"하는 지점이다. `@start` 맵에 `(장치, 섹터)`를 키로 발행 시각(`nsecs`)을 저장한다 — C2의 futex 측정과 똑같은 "진입 시각 기억" 패턴이다.
+- **부착(발행)** `tracepoint:block:block_rq_issue`: 블록 요청이 장치로 **발행되는 순간**. 36장의 "장치가 일을 시작"하는 지점이다. `@start` 맵에 `(장치, 섹터)`를 키로 발행 시각(`nsecs` — 나노초)을 저장한다 — C2의 futex 측정과 똑같은 "진입 시각 기억" 패턴이다.
 - **부착(완료)** `tracepoint:block:block_rq_complete`: 같은 요청이 **완료되는 순간**. 필터 `/@start[...]/`로 발행을 본 요청만 처리한다(짝 없는 완료는 무시).
 - **집계(헬퍼)** `hist((nsecs - @start[...]) / 1000)`: 완료−발행 = 그 I/O가 실제로 걸린 시간(ns), 1000으로 나눠 마이크로초로 만든 뒤 `hist()`로 **2의 거듭제곱 구간별 히스토그램**에 넣는다. 이것이 `biolatency`가 그리는 분포 막대의 정체다.
 - **정리** `delete(@start[...])`: 짝지은 발행 기록을 지워 맵이 새지 않게 한다.
