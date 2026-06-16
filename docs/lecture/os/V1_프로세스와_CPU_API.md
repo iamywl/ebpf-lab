@@ -95,6 +95,24 @@ python3 fork.py -s 0 -c       # -c 로 정답 프로세스 트리 확인
 python3 fork.py -A a+b,b+c     # 직접 fork 시나리오를 줘 보기
 ```
 
+### ⚙️ 리눅스 커널은
+
+리눅스에서 프로세스와 스레드는 모두 `task_struct` 하나로 표현된다. 스레드도 `task_struct`이며, 같은 프로세스의 스레드끼리는 같은 `tgid`를 공유한다. 핵심 필드는 다음과 같다.
+
+```c
+struct task_struct {            // (커널 6.17 BTF 발췌)
+    unsigned int        __state;       // 실행/대기 상태 (TASK_RUNNING 등). 최신 커널은 state가 아니라 __state
+    struct mm_struct   *mm;            // 주소공간. 커널 스레드는 NULL, 사용자 스레드끼리는 공유
+    pid_t               pid;           // 커널 관점 식별자(= 스레드 TID)
+    pid_t               tgid;          // 스레드 그룹 id = 사용자가 말하는 PID
+    struct task_struct *real_parent;   // 부모
+    char                comm[16];      // 프로세스 이름 (TASK_COMM_LEN = 16)
+    struct sched_entity se;            // 스케줄러가 보는 실체(→ V3)
+};
+```
+
+`fork`의 커널 경로는 `fork()` → `kernel_clone()` → `copy_process()`(`kernel/fork.c`)이며, 여기서 새 `task_struct`를 복제한다. 주소공간은 `copy_mm()`이 처리하되, 곧장 통째 복사가 아니라 COW(페이지를 공유하다 쓰는 순간 복제)로 미룬다. `exec`은 `execve` → `do_execveat_common()` → `load_elf_binary()`로 이어지며, 현재 주소공간을 새 프로그램 이미지로 갈아끼운다. fork로 만든 자식이 exec로 다른 프로그램이 되는 분리가 여기서 일어난다. bpftrace로 `comm`·`pid`를 읽을 때 사실은 이 `task_struct` 필드를 `bpf_get_current_comm()`/`bpf_get_current_pid_tgid()` 헬퍼로 읽는 것이다(다음 🔬 절과 연결된다).
+
 ### 🔬 eBPF로는 (실측)
 
 `execsnoop` 의 출력으로 돌아가 보자. **PPID → PID** 관계가 바로 `fork` 의 흔적이고, **PCOMM 이 바뀌는 것**이 `exec` 의 흔적이다. 셸(`bash`)이 `ls` 를 실행하는 과정은 실제로 이렇다.

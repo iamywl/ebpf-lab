@@ -45,6 +45,26 @@ cd ~/ostep-homework/threads-intro
 
 > `x86.py`는 가짜 어셈블리로 **스레드 인터리빙(끼어들기)** 만 보여주는 도구다. "왜 결과가 들쭉날쭉한가"는 C2 모듈의 데이터 레이스로 이어진다.
 
+### ⚙️ 리눅스 커널은 (과목2 🔵 심화)
+
+리눅스는 프로세스와 스레드를 따로 구분하지 않는다. 둘 다 `task_struct`로 만든다. 차이는 무엇을 공유하느냐뿐이다.
+
+생성 경로는 다음과 같다. `pthread_create`는 glibc 안에서 `clone3()` 시스템콜을 호출하고, 커널은 `kernel_clone()`을 거쳐 `copy_process()`(`kernel/fork.c`)로 들어간다. 여기서 호출에 넘어온 플래그에 따라 자원을 복제할지 공유할지를 정한다.
+
+핵심 플래그는 다음과 같다.
+
+```c
+/* kernel/fork.c 의 copy_process() 가 보는 주요 clone 플래그 */
+CLONE_VM       /* 주소공간 mm_struct 공유 — 스레드의 본질 */
+CLONE_FILES    /* 파일 디스크립터 테이블 공유 */
+CLONE_THREAD   /* 같은 tgid 로 묶음 */
+CLONE_SIGHAND  /* 시그널 핸들러 공유 */
+```
+
+`copy_process()`가 부르는 `copy_mm()`은 `CLONE_VM`이 켜져 있으면 `mm`을 새로 만들지 않고 부모의 것을 가리키게 한다. 그래서 같은 프로세스의 스레드들은 `task_struct`는 각각 따로 갖되, 각 `task_struct.mm`이 같은 `mm_struct`를 가리킨다. 이것이 위에서 OSTEP가 말한 "힙·전역 공유"의 커널 실체다.
+
+이 공유 관계는 🔬 절에서 `clone3` 시스템콜을 카운트하고, 같은 PID(=TGID) 아래 여러 TID가 한 주소공간을 공유하는 모습으로 확인한다.
+
 ### 🔬 eBPF로는 (실측)
 
 OSTEP는 "스레드가 생긴다"고 말하지만, **리눅스 커널 입장에서 스레드 생성은 `clone()` 시스템콜 한 번**이다. 프로세스 생성(`fork`)과 같은 시스템콜을 쓰되, **무엇을 공유할지 플래그로 지정**하는 것이 차이다. glibc의 `pthread_create`는 내부에서 `CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_THREAD ...` 플래그를 켠 `clone3()`을 호출한다. (`CLONE_VM`이 바로 "주소공간 공유"다.) 정리하면, `pthread_create`는 내부적으로 `clone()`을 부르고, `CLONE_VM` 플래그가 새 task를 부모와 같은 주소공간(`mm_struct`)을 공유하게 한다 — 이것이 위에서 말한 "메모리 공유"의 실체다.
@@ -138,7 +158,7 @@ flowchart LR
 
 ## 💻 코드로 보기 — 이 관찰을 하는 eBPF 코드
 
-> 위 OS 개념을 eBPF로 어떻게 잡는지 실제 도구 코드를 직접 본다.
+> 위 OS 개념을 eBPF로 어떻게 잡는지 실제 도구 코드를 직접 본다. 여기서는 스레드 생성(clone)과 짝이 되는 시그널 전달을 함께 본다.
 
 1절에서 `clone3` 시스템콜로 "새 실행 흐름이 생기는 순간"을 봤다면, 여기서는 그 형제 개념인 **시그널** — 즉 프로세스 사이의 비동기 통지(누가 누구를 깨우거나 죽이는가) — 를 잡는 실제 도구 `labs/01_프로세스/signal_trace.py`를 뜯어본다. 스레드/프로세스가 "생기는" 길과 "통지를 주고받는" 길을 같은 eBPF 패턴(추적점 부착 + perf 버퍼)으로 관찰한다는 것이 핵심이다.
 

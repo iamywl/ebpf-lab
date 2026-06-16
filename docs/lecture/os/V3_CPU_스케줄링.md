@@ -98,6 +98,25 @@ python3 ../cpu-sched-lottery/lottery.py -j 3 -s 0 -c    # 추첨, 시드 0
 python3 ../cpu-sched-multi/multi.py -n 2 -L a:100:100 -c # CPU 2개 멀티프로세서
 ```
 
+### ⚙️ 리눅스 커널은
+
+각 task의 스케줄링 상태는 `task_struct.se`(`struct sched_entity`)에 들어 있다. 실습 VM(커널 6.17)의 BTF에서 확인한 실제 필드는 다음과 같다.
+
+```c
+struct sched_entity {           // (커널 6.17 BTF 발췌)
+    struct load_weight load;        // nice 값 → 가중치
+    struct rb_node      run_node;   // 런큐(레드-블랙 트리)에 매다는 노드
+    u64                 vruntime;   // 가상 실행시간(덜 쓴 task가 먼저)
+    u64                 deadline;    // EEVDF: 가상 마감시간
+    u64                 min_vruntime;
+    u64                 sum_exec_runtime;
+};
+```
+
+러너블 task들은 CPU별 런큐 `struct cfs_rq`의 `tasks_timeline`(`rb_root_cached` = 레드-블랙 트리)에 vruntime 순으로 정렬돼 매달린다. 스케줄러는 트리의 가장 왼쪽(가장 덜 쓴/마감 임박) task를 고른다. 6.17의 기본 스케줄러는 **EEVDF**(Earliest Eligible Virtual Deadline First)로, 커널 6.6에서 기존 **CFS**를 대체했다. vruntime에 더해 `deadline`/`slice`로 응답성을 개선한 것이며, 자료구조(런큐=레드블랙트리, sched_entity)는 그대로 이어진다.
+
+컨텍스트 스위치 본체는 `__schedule()`(`kernel/sched/core.c`)이다. 여기서 `pick_next_task_fair()`가 다음 task를 고르고 `context_switch()`가 레지스터·주소공간을 교체한다. eBPF의 `sched:sched_switch`/`sched_wakeup` 추적점은 이 과정의 "깨어남"과 "전환" 순간에 붙는다(→ 🔬 절, runqlat).
+
 ### 🔬 eBPF로는 (실측)
 
 리눅스의 실제 스케줄러는 오랫동안 **CFS(Completely Fair Scheduler)** 였고 커널 6.6부터 **EEVDF** 로 바뀌었다. 둘 다 OSTEP의 MLFQ·추첨과 같은 목표(대화형 작업 우대 + 공정한 비례 배분)를 추구하지만, **가상 실행시간(vruntime)** 기반의 정교한 방식을 쓴다. 우리 VM(커널 6.17)은 EEVDF 를 쓴다.

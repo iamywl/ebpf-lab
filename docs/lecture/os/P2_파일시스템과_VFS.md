@@ -86,6 +86,28 @@ stat /tmp/없는파일 2>/dev/null   # statsnoop에 ENOENT로 나타난다
 > ```
 > `vsfs.py`는 "파일을 만들면 inode 비트맵·데이터 비트맵·디렉터리 엔트리가 어떻게 바뀌는가"를 한 단계씩 보여준다.
 
+### ⚙️ 리눅스 커널은 (📕 과목2 심화)
+
+VFS는 네 개의 핵심 구조체로 파일시스템을 추상화한다. 그 중 `struct inode`를 커널 6.17 BTF에서 발췌하면 다음과 같다.
+
+```c
+struct inode {                  // (커널 6.17 BTF 발췌)
+    umode_t                       i_mode;     // 파일 종류·권한
+    const struct inode_operations *i_op;      // inode 연산(create/lookup 등)
+    struct super_block           *i_sb;       // 소속 파일시스템
+    struct address_space         *i_mapping;  // 이 파일의 페이지 캐시(→ P3)
+    long unsigned int             i_ino;      // inode 번호
+    loff_t                        i_size;     // 파일 크기
+    const struct file_operations *i_fop;      // 파일 연산(read/write 등)
+};
+```
+
+네 구조체의 역할은 다음과 같이 나뉜다. `struct super_block`은 마운트된 파일시스템 전체를 나타내고, `struct inode`는 파일 하나의 메타데이터를 담는다(이름은 담지 않는다). `struct dentry`는 이름과 inode의 매핑을 담당하며 `d_name`·`d_inode` 필드를 가진다. `struct file`은 열린 파일 인스턴스를 나타내고 `f_op`·`f_pos`·`f_inode` 필드를 가진다.
+
+`read()`의 커널 경로는 `vfs_read()`를 거쳐 `file->f_op->read_iter()`를 호출하고, 이 함수 포인터가 실제 파일시스템(ext4 등)의 구현으로 분기한다. 이 `f_op` 함수 포인터 테이블이 "다른 파일시스템을 같은 인터페이스로" 다루는 다형성의 핵심이다.
+
+eBPF는 `vfs_read`/`vfs_write` kprobe로 이 공통 길목을 잡는다. 그 방법은 아래 🔬 절에서 본다.
+
 ### 🔬 eBPF로는 (실측)
 
 `vfsstat`은 VFS 함수 호출(`vfs_read`/`vfs_write`/`vfs_open`/`vfs_create`/`vfs_fsync` 등)을 세어 **초당 횟수**로 보여준다. vsfs 시뮬레이터가 "한 연산이 어떤 자료구조를 건드리나"를 가르친다면, `vfsstat`은 "지금 시스템 전체에서 어떤 종류 연산이 초당 몇 번 일어나나"를 보여준다.
