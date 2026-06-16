@@ -1,6 +1,6 @@
 # 8주차 — BCC 입문: 맵과 perf 이벤트
 
-> bpftrace 한 줄로 부족할 때, Python 으로 로더를 쓰고 C 로 커널 코드를 짜는 BCC 로 넘어갑니다. 이번 주의 핵심은 **맵(집계)과 perf 이벤트(스트리밍)의 차이**입니다 — 실습①·②가 정확히 이 두 갈래입니다.
+> bpftrace 한 줄로 부족할 때, Python 으로 로더를 쓰고 C 로 커널 코드를 짜는 BCC 로 넘어간다. 이번 주의 핵심은 **맵(집계)과 perf 이벤트(스트리밍)의 차이**다 — 실습①·②가 정확히 이 두 갈래다.
 
 last_updated: 2026-06-11
 
@@ -21,16 +21,16 @@ last_updated: 2026-06-11
 - **맵(집계) vs perf 이벤트(스트리밍)** 의 차이와 선택 기준을 말할 수 있다.
 - 아주 작은 BCC 스크립트를 처음부터 작성해 실행할 수 있다.
 
-> [7주차](07주차_bpftrace_입문.md)의 `@[comm]=count()` 가 이번 주 `BPF_HASH` 로, 7-6 의 실시간 출력이 `BPF_PERF_OUTPUT` 으로 이어집니다. 이번 주 코드는 [9주차](09주차_실습1_시스템콜_추적기.md)·[10주차](10주차_실습2_네트워크_연결_추적기.md) 실습의 실제 골격입니다.
+> [7주차](07주차_bpftrace_입문.md)의 `@[comm]=count()` 가 이번 주 `BPF_HASH` 로, 7-6 의 실시간 출력이 `BPF_PERF_OUTPUT` 으로 이어진다. 이번 주 코드는 [9주차](09주차_실습1_시스템콜_추적기.md)·[10주차](10주차_실습2_네트워크_연결_추적기.md) 실습의 실제 골격이다.
 
 ---
 
 ## 1. BCC 구조 — Python 이 운전하고, C 가 커널에서 돈다
 
-BCC(BPF Compiler Collection)는 두 부분으로 이뤄집니다.
+BCC(BPF Compiler Collection)는 두 부분으로 이뤄진다.
 
-- **C 커널 코드**: 실제로 커널에서 도는 eBPF 프로그램. C 로 작성하지만, 파이썬 안에 **문자열로** 담거나 `.c` 파일로 둡니다.
-- **Python 프런트엔드(로더)**: 그 C 코드를 **실행 시점에 clang 으로 컴파일**해 커널에 로드·부착하고, 맵을 읽거나 perf 이벤트를 받아 화면에 찍습니다.
+- **C 커널 코드**: 실제로 커널에서 도는 eBPF 프로그램. C 로 작성하지만, 파이썬 안에 **문자열로** 담거나 `.c` 파일로 둔다.
+- **Python 프런트엔드(로더)**: 그 C 코드를 **실행 시점에 clang 으로 컴파일**해 커널에 로드·부착하고, 맵을 읽거나 perf 이벤트를 받아 화면에 찍는다.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
@@ -46,7 +46,7 @@ flowchart LR
     K -->|"맵 / perf 이벤트"| READ
 ```
 
-> [6주차](06주차_개발환경_VM_BTF_CO-RE개념.md)에서 본 대로 BCC 는 **런타임 컴파일** 방식입니다. 그래서 VM 에 clang 18 과 커널 헤더가 설치돼 있어야 합니다(우리 VM 은 준비됨). 첫 실행이 약간 느린 이유도 매번 컴파일하기 때문입니다.
+> [6주차](06주차_개발환경_VM_BTF_CO-RE개념.md)에서 본 대로 BCC 는 **런타임 컴파일** 방식이다. 그래서 VM 에 clang 18 과 커널 헤더가 설치돼 있어야 한다(우리 VM 은 준비됨). 첫 실행이 약간 느린 이유도 매번 컴파일하기 때문이다.
 
 가장 작은 BCC 프로그램 — execve(프로그램 실행)를 세는 5줄짜리:
 
@@ -88,7 +88,7 @@ sudo python3 execve_count.py
 | `BPF(text=prog)` | C 소스를 **문자열**로 넘김 | 짧은 코드·한 파일에 다 담을 때 |
 | `BPF(src_file="bpf/x.c")` | C 소스를 **별도 `.c` 파일**로 | 코드가 길고 분리하고 싶을 때 |
 
-본 랩의 실습①·②는 C 코드를 별도 파일로 분리하고 `src_file=` 로 로드합니다. 예를 들어 실습①의 `tracer.py` 는 다음과 같습니다.
+본 랩의 실습①·②는 C 코드를 별도 파일로 분리하고 `src_file=` 로 로드한다. 예를 들어 실습①의 `tracer.py` 는 다음과 같다.
 
 ```python
 # projects/syscall-tracer/tracer.py 발췌
@@ -97,13 +97,13 @@ BPF_SOURCE = "bpf/syscall_count.c"
 bpf = BPF(src_file=BPF_SOURCE)     # bpf/syscall_count.c 를 런타임 컴파일·로드
 ```
 
-> 두 방법은 컴파일·로드 동작이 같습니다. 코드량과 가독성에 따라 고르면 됩니다.
+> 두 방법은 컴파일·로드 동작이 같다. 코드량과 가독성에 따라 고르면 된다.
 
 ---
 
 ## 3. BCC 매크로 — 맵을 선언하는 약식 문법
 
-순수 libbpf 라면 맵을 장황하게 선언해야 하지만, BCC 는 매크로로 짧게 씁니다.
+순수 libbpf 라면 맵을 장황하게 선언해야 하지만, BCC 는 매크로로 짧게 쓴다.
 
 | 매크로 | 의미 | 데이터 흐름 |
 |:---|:---|:---|
@@ -111,7 +111,7 @@ bpf = BPF(src_file=BPF_SOURCE)     # bpf/syscall_count.c 를 런타임 컴파일
 | `BPF_ARRAY(name, Type, N)` | 고정 크기 배열 맵 | 인덱스로 접근(설정값·작은 상태) |
 | `BPF_PERF_OUTPUT(name)` | perf 이벤트 출력 채널 | **스트리밍** (이벤트를 즉시 사용자 공간으로) |
 
-**`BPF_HASH` 같은 매크로는 어떻게 진짜 맵 연산이 되나 — clang rewriter.** 위 매크로들은 사실 표준 C 가 아닙니다. BCC 는 컴파일 전에 **clang rewriter**(clang 의 AST 를 손보는 전처리 단계)를 한 번 통과시켜, 이 약식 문법을 실제 BPF 맵 정의와 헬퍼 호출로 **펼칩니다(rewrite)**.
+**`BPF_HASH` 같은 매크로는 어떻게 진짜 맵 연산이 되나 — clang rewriter.** 위 매크로들은 사실 표준 C 가 아니다. BCC 는 컴파일 전에 **clang rewriter**(clang 의 AST 를 손보는 전처리 단계)를 한 번 통과시켜, 이 약식 문법을 실제 BPF 맵 정의와 헬퍼 호출로 **펼친다(rewrite)**.
 
 | 우리가 쓴 약식 | rewriter 가 펼친 결과(개념) |
 |:---|:---|
@@ -129,9 +129,9 @@ flowchart LR
     C -->|"bpf() 로드"| D["커널(검증기·JIT)"]
 ```
 
-> 그래서 `counts.lookup_or_try_init(...)` 같은 "메서드 호출처럼 생긴" 문법이 동작합니다. `counts` 는 객체가 아니라 맵 이름이고, `.lookup(...)` 은 rewriter 가 `bpf_map_lookup_elem(&counts, ...)` 로 바꿔주는 **약속된 표기**입니다. libbpf([11주차](11주차_libbpf와_CO-RE_프로덕션eBPF.md))에서는 이 매크로가 없어 헬퍼를 직접 부릅니다.
+> 그래서 `counts.lookup_or_try_init(...)` 같은 "메서드 호출처럼 생긴" 문법이 동작한다. `counts` 는 객체가 아니라 맵 이름이고, `.lookup(...)` 은 rewriter 가 `bpf_map_lookup_elem(&counts, ...)` 로 바꿔주는 **약속된 표기**다. libbpf([11주차](11주차_libbpf와_CO-RE_프로덕션eBPF.md))에서는 이 매크로가 없어 헬퍼를 직접 부른다.
 
-실습①의 C 코드는 이 세 가지를 모두 씁니다.
+실습①의 C 코드는 이 세 가지를 모두 쓴다.
 
 ```c
 // projects/syscall-tracer/bpf/syscall_count.c 발췌
@@ -141,13 +141,13 @@ BPF_HASH(comms,  u32, struct comm_t);  // tgid -> 프로세스 이름
 BPF_ARRAY(target, u32, 1);             // 사용자 공간이 주입하는 필터값 (1칸 배열)
 ```
 
-`BPF_ARRAY(target, u32, 1)` 은 "사용자 공간 → 커널" 로 **설정값을 전달하는 통로**로 쓰입니다. 파이썬에서 추적 대상 PID 를 이 배열의 0번 칸에 써 넣으면, 커널 코드가 그 값을 읽어 필터링합니다(아래 4·6절).
+`BPF_ARRAY(target, u32, 1)` 은 "사용자 공간 → 커널" 로 **설정값을 전달하는 통로**로 쓰인다. 파이썬에서 추적 대상 PID 를 이 배열의 0번 칸에 써 넣으면, 커널 코드가 그 값을 읽어 필터링한다(아래 4·6절).
 
 ---
 
 ## 4. 프로브 부착 명명규칙 — 함수 이름만으로 자동 연결
 
-BCC 는 **C 함수 이름의 접두사**를 보고 어디에 붙일지 스스로 결정합니다. 따로 부착 코드를 쓰지 않아도 됩니다.
+BCC 는 **C 함수 이름의 접두사**를 보고 어디에 붙일지 스스로 결정한다. 따로 부착 코드를 쓰지 않아도 된다.
 
 | C 코드 작성법 | 부착 대상 | 본 랩 사용처 |
 |:---|:---|:---|
@@ -192,13 +192,13 @@ int kprobe__tcp_v4_connect(struct pt_regs *ctx, void *sk,
 }
 ```
 
-> 두 코드의 마지막 줄을 비교하세요. 실습①은 `counts...`(맵에 집계), 실습②는 `events.perf_submit`(이벤트 스트리밍)으로 끝납니다. 이 차이가 이번 주의 핵심입니다(5절).
+> 두 코드의 마지막 줄을 비교해 보자. 실습①은 `counts...`(맵에 집계), 실습②는 `events.perf_submit`(이벤트 스트리밍)으로 끝난다. 이 차이가 이번 주의 핵심이다(5절).
 
 ---
 
 ## 5. 맵(집계) vs perf 이벤트(스트리밍) — 핵심 비교
 
-eBPF 가 모은 데이터를 사용자 공간으로 가져오는 두 갈래입니다.
+eBPF 가 모은 데이터를 사용자 공간으로 가져오는 두 갈래다.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
@@ -226,7 +226,7 @@ flowchart TB
 
 ### 5-1. perf buffer vs ring buffer — 스트리밍의 두 세대
 
-"개별 이벤트를 사용자 공간으로 밀어 보내는" 채널에도 두 가지가 있습니다. `BPF_PERF_OUTPUT`(perf buffer)은 오래된 표준이고, 커널 5.8+ 에서 도입된 `BPF_RINGBUF_OUTPUT`(ring buffer)이 그 약점을 보완한 후속입니다.
+"개별 이벤트를 사용자 공간으로 밀어 보내는" 채널에도 두 가지가 있다. `BPF_PERF_OUTPUT`(perf buffer)은 오래된 표준이고, 커널 5.8+ 에서 도입된 `BPF_RINGBUF_OUTPUT`(ring buffer)이 그 약점을 보완한 후속이다.
 
 | 비교 | perf buffer (`BPF_PERF_OUTPUT`) | ring buffer (`BPF_RINGBUF_OUTPUT`) |
 |:---|:---|:---|
@@ -252,7 +252,7 @@ flowchart TB
     end
 ```
 
-> 콜백·폴링 구조는 둘이 비슷합니다. perf 는 `open_perf_buffer(콜백)` + `perf_buffer_poll()`, ring buffer 는 `open_ring_buffer(콜백)` + `ring_buffer_poll()` 입니다. 둘 다 사용자 공간이 **주기적으로 폴링**하면, 커널이 쌓아둔 이벤트를 꺼내 등록된 콜백을 호출합니다. 우리 VM 은 커널 6.17 이라 ring buffer 도 쓸 수 있지만, 실습②는 더 넓은 호환성을 위해 perf buffer 를 씁니다. "전역 순서가 꼭 필요하거나 메모리가 빠듯하면 ring buffer" 가 실무 선택의 요지입니다.
+> 콜백·폴링 구조는 둘이 비슷하다. perf 는 `open_perf_buffer(콜백)` + `perf_buffer_poll()`, ring buffer 는 `open_ring_buffer(콜백)` + `ring_buffer_poll()` 이다. 둘 다 사용자 공간이 **주기적으로 폴링**하면, 커널이 쌓아둔 이벤트를 꺼내 등록된 콜백을 호출한다. 우리 VM 은 커널 6.17 이라 ring buffer 도 쓸 수 있지만, 실습②는 더 넓은 호환성을 위해 perf buffer 를 쓴다. "전역 순서가 꼭 필요하거나 메모리가 빠듯하면 ring buffer" 가 실무 선택의 요지다.
 
 ---
 
@@ -268,7 +268,7 @@ for k, v in counts.items():          # 키 객체 k, 값 객체 v
     per_pid[k.tgid][name] = v.value  # ctypes: .value 로 실제 정수 꺼냄
 ```
 
-사용자 공간이 커널로 **설정값을 주입**할 때도 같은 맵 인터페이스를 씁니다. 실습①은 추적 대상 PID 를 `BPF_ARRAY` 에 써 넣습니다.
+사용자 공간이 커널로 **설정값을 주입**할 때도 같은 맵 인터페이스를 쓴다. 실습①은 추적 대상 PID 를 `BPF_ARRAY` 에 써 넣는다.
 
 ```python
 # projects/syscall-tracer/tracer.py 발췌 — 필터값 주입
@@ -277,11 +277,11 @@ want = 0xFFFFFFFF if target_pid == 0 else target_pid   # 0 → 전체, 그 외 �
 bpf["target"][ctypes.c_int(0)] = ctypes.c_uint(want)    # 0번 칸에 기록
 ```
 
-> ctypes 주의: BCC 맵의 키·값은 C 타입이라 파이썬에서 `k.value`, `v.value` 처럼 **`.value`** 로 꺼냅니다. 주입할 땐 `ctypes.c_int(0)`, `ctypes.c_uint(...)` 로 **C 타입을 명시**합니다.
+> ctypes 주의: BCC 맵의 키·값은 C 타입이라 파이썬에서 `k.value`, `v.value` 처럼 **`.value`** 로 꺼낸다. 주입할 땐 `ctypes.c_int(0)`, `ctypes.c_uint(...)` 로 **C 타입을 명시**한다.
 
-> 왜 `.value` 인가: BCC 는 C 소스의 `struct key_t { u32 tgid; u32 syscall_id; }` 같은 정의를 읽어 **대응하는 ctypes 구조체 클래스를 자동 생성**합니다. 그래서 `k.tgid`·`k.syscall_id` 처럼 필드명으로 접근되고, 단일 `u64` 값은 `ctypes.c_ulong` 인스턴스라 실제 정수를 `.value` 로 꺼내는 것입니다. 즉 파이썬 객체가 C 메모리 레이아웃을 그대로 비춥니다 — 별도 직렬화 없이 커널 맵의 바이트를 파이썬에서 직접 해석합니다.
+> 왜 `.value` 인가: BCC 는 C 소스의 `struct key_t { u32 tgid; u32 syscall_id; }` 같은 정의를 읽어 **대응하는 ctypes 구조체 클래스를 자동 생성**한다. 그래서 `k.tgid`·`k.syscall_id` 처럼 필드명으로 접근되고, 단일 `u64` 값은 `ctypes.c_ulong` 인스턴스라 실제 정수를 `.value` 로 꺼내는 것이다. 즉 파이썬 객체가 C 메모리 레이아웃을 그대로 비춘다 — 별도 직렬화 없이 커널 맵의 바이트를 파이썬에서 직접 해석한다.
 
-**`BPF(text=...)` 한 줄이 하는 일.** 이 한 줄 안에서 (1) C 소스를 libbcc 가 **런타임 clang 으로 컴파일**하고, (2) 그 바이트코드를 `bpf()` 시스템콜로 커널에 **로드**하며, (3) 함수 이름 규칙(`kprobe__`, `TRACEPOINT_PROBE`)을 보고 프로브에 **부착**하고, (4) 선언된 맵들을 파이썬에서 `b["이름"]` 으로 쓸 수 있게 **노출**합니다. 그래서 `b = BPF(text=prog)` 가 끝나는 순간 이미 추적이 돌고 있습니다 — 이 "생성 즉시 부착" 성질이 [9주차](09주차_실습1_시스템콜_추적기.md) 실습①의 race 방어 설계(필터 게이트)와 직접 연결됩니다.
+**`BPF(text=...)` 한 줄이 하는 일.** 이 한 줄 안에서 (1) C 소스를 libbcc 가 **런타임 clang 으로 컴파일**하고, (2) 그 바이트코드를 `bpf()` 시스템콜로 커널에 **로드**하며, (3) 함수 이름 규칙(`kprobe__`, `TRACEPOINT_PROBE`)을 보고 프로브에 **부착**하고, (4) 선언된 맵들을 파이썬에서 `b["이름"]` 으로 쓸 수 있게 **노출**한다. 그래서 `b = BPF(text=prog)` 가 끝나는 순간 이미 추적이 돌고 있다 — 이 "생성 즉시 부착" 성질이 [9주차](09주차_실습1_시스템콜_추적기.md) 실습①의 race 방어 설계(필터 게이트)와 직접 연결된다.
 
 ### 6-2. perf 버퍼 폴링 (스트리밍형, 실습②)
 
@@ -301,13 +301,13 @@ while True:
     bpf.perf_buffer_poll(timeout=200)        # 이벤트를 받아 handle 호출
 ```
 
-> `lost_cb` 가 중요합니다. perf 이벤트는 너무 빨리 쏟아지면 버퍼가 넘쳐 조용히 유실될 수 있어, 유실 건수를 따로 세어 사용자에게 알립니다(맵 방식엔 없는 고민).
+> `lost_cb` 가 중요하다. perf 이벤트는 너무 빨리 쏟아지면 버퍼가 넘쳐 조용히 유실될 수 있어, 유실 건수를 따로 세어 사용자에게 알린다(맵 방식엔 없는 고민).
 
 ---
 
 ## 7. 미니 예제 — 처음부터 작성하는 BCC 스크립트
 
-1절의 `execve_count.py` 를 조금 키워, **프로세스 이름까지** 보여주도록 만들어 봅니다. 맵 키에 이름을 함께 담는 패턴입니다.
+1절의 `execve_count.py` 를 조금 키워, **프로세스 이름까지** 보여주도록 만들어 본다. 맵 키에 이름을 함께 담는 패턴이다.
 
 ```python
 #!/usr/bin/env python3
@@ -354,13 +354,13 @@ sudo python3 execve_by_comm.py
   ls                   2 회
 ```
 
-> 이 한 파일에 **`BPF_HASH`(맵) + `TRACEPOINT_PROBE`(부착) + `bpf_get_current_comm`(헬퍼) + 파이썬 맵 읽기** 가 모두 들어 있습니다. 실습①을 읽을 준비가 끝난 셈입니다.
+> 이 한 파일에 **`BPF_HASH`(맵) + `TRACEPOINT_PROBE`(부착) + `bpf_get_current_comm`(헬퍼) + 파이썬 맵 읽기** 가 모두 들어 있다. 실습①을 읽을 준비가 끝난 셈이다.
 
 ---
 
 ## ⚙️ 리눅스 커널은 BCC 가 보낸 바이트코드를 받아 perf 로 회신한다
 
-BCC 가 편리해 보여도, 그 아래에서는 커널과의 정해진 절차가 돌고 있습니다. BCC 는 **런타임에 clang 으로 C 소스를 eBPF 바이트코드로 컴파일**한 뒤, `bpf()` 시스템콜로 그 바이트코드를 커널에 **로드·부착**합니다. 커널은 검증기·JIT 를 거쳐 프로그램을 훅에 붙이고, 실행 중 모은 데이터를 **perf ring buffer(맵)** 에 담아 사용자 공간으로 **회신**합니다. 즉 사용자 공간(Python)과 커널이 맵을 사이에 두고 주고받는 구조입니다.
+BCC 가 편리해 보여도, 그 아래에서는 커널과의 정해진 절차가 돌고 있다. BCC 는 **런타임에 clang 으로 C 소스를 eBPF 바이트코드로 컴파일**한 뒤, `bpf()` 시스템콜로 그 바이트코드를 커널에 **로드·부착**한다. 커널은 검증기·JIT 를 거쳐 프로그램을 훅에 붙이고, 실행 중 모은 데이터를 **perf ring buffer(맵)** 에 담아 사용자 공간으로 **회신**한다. 즉 사용자 공간(Python)과 커널이 맵을 사이에 두고 주고받는 구조다.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
@@ -370,27 +370,27 @@ flowchart LR
     K -->|"perf ring buffer 로 회신"| PY["Python 프런트엔드"]
 ```
 
-소스/구조 측면에서, 컴파일·로드를 담당하는 것은 `libbcc`(내부적으로 clang/LLVM 사용)이고, Python `bcc` 모듈이 그 위의 얇은 래퍼입니다. 우리 VM(커널 6.17 aarch64)에는 clang 18 과 커널 헤더가 갖춰져 이 파이프라인이 돕니다.
+소스/구조 측면에서, 컴파일·로드를 담당하는 것은 `libbcc`(내부적으로 clang/LLVM 사용)이고, Python `bcc` 모듈이 그 위의 얇은 래퍼다. 우리 VM(커널 6.17 aarch64)에는 clang 18 과 커널 헤더가 갖춰져 이 파이프라인이 돈다.
 
 ---
 
 ## 📸 실제 실행 화면 (실제 터미널 캡처)
 
-아래는 VM(커널 6.17 aarch64)에서 BCC 도구를 점검하고 직접 실행한 모습입니다.
+아래는 VM(커널 6.17 aarch64)에서 BCC 도구를 점검하고 직접 실행한 모습이다.
 
 ![설치된 BCC 도구 목록 — 실제 터미널 캡처](images/more/w8_bcctools.png)
 
-위는 VM 에 설치된 BCC 도구의 개수와 예시를 확인한 실제 터미널 캡처입니다. 약 128종에 이르는 완성형 도구가 함께 깔려 있어, 직접 짜기 전에 기성 도구로 관측을 시작할 수 있습니다.
+위는 VM 에 설치된 BCC 도구의 개수와 예시를 확인한 실제 터미널 캡처다. 약 128종에 이르는 완성형 도구가 함께 깔려 있어, 직접 짜기 전에 기성 도구로 관측을 시작할 수 있다.
 
 ![opensnoop-bpfcc 실행 — 실제 터미널 캡처](images/more/w8_opensnoop.png)
 
-위는 `opensnoop-bpfcc` 로 시스템의 파일 열기(`open`)를 실시간으로 잡는 실제 터미널 캡처입니다. 어떤 프로세스가 어떤 파일을 여는지가 한 줄씩 스트리밍되는 것이 perf 이벤트 방식의 전형입니다.
+위는 `opensnoop-bpfcc` 로 시스템의 파일 열기(`open`)를 실시간으로 잡는 실제 터미널 캡처다. 어떤 프로세스가 어떤 파일을 여는지가 한 줄씩 스트리밍되는 것이 perf 이벤트 방식의 전형이다.
 
 ---
 
 ## 💻 코드로 보기 — BCC 프로그램 전문
 
-이번 주의 개념(C 커널 코드 + Python 로더, 맵 vs perf 이벤트)을 **실제 파일** 두 개로 확인합니다. `hello_bcc.py` 는 가장 작은 BCC 스크립트이고, `open_audit.py`(labs)는 perf 이벤트와 진입·반환 짝짓기를 모두 보여줍니다.
+이번 주의 개념(C 커널 코드 + Python 로더, 맵 vs perf 이벤트)을 **실제 파일** 두 개로 확인한다. `hello_bcc.py` 는 가장 작은 BCC 스크립트이고, `open_audit.py`(labs)는 perf 이벤트와 진입·반환 짝짓기를 모두 보여준다.
 
 ### hello_bcc.py — 가장 작은 BCC (C 문자열 + 로드 + trace_fields)
 
@@ -440,13 +440,13 @@ except KeyboardInterrupt:
     print("\neBPF 종료. 안녕히 가세요!")
 ```
 
-- **커널 C 문자열** `bpf_text`: `TRACEPOINT_PROBE(syscalls, sys_enter_execve)` 로 execve 진입점에 자동 부착됩니다(4절의 명명규칙). 안에서는 `bpf_trace_printk("exec\n")` 로 ASCII 신호만 보냅니다 — `bpf_trace_printk` 의 형식 문자열은 한글을 못 받기 때문입니다.
-- **`BPF(text=bpf_text)`**: 이 한 줄이 C 를 런타임 clang 으로 컴파일 → `bpf()` 로 로드 → 트레이스포인트에 부착까지 끝냅니다. 끝나는 순간 이미 추적이 돕니다.
-- **`trace_fields()` 출력**: 커널이 보낸 메시지를 `(task, pid, cpu, flags, ts, msg)` 튜플로 받아, 한글 출력은 **Python 쪽**에서 합니다. "커널은 신호만, 표현은 사용자 공간" 이라는 역할 분리가 한눈에 보입니다. (이 예제는 맵을 안 쓰는 `trace_pipe` 방식이고, 다음 `open_audit.py` 에서 맵·perf 로 넘어갑니다.)
+- **커널 C 문자열** `bpf_text`: `TRACEPOINT_PROBE(syscalls, sys_enter_execve)` 로 execve 진입점에 자동 부착된다(4절의 명명규칙). 안에서는 `bpf_trace_printk("exec\n")` 로 ASCII 신호만 보낸다 — `bpf_trace_printk` 의 형식 문자열은 한글을 못 받기 때문이다.
+- **`BPF(text=bpf_text)`**: 이 한 줄이 C 를 런타임 clang 으로 컴파일 → `bpf()` 로 로드 → 트레이스포인트에 부착까지 끝낸다. 끝나는 순간 이미 추적이 돈다.
+- **`trace_fields()` 출력**: 커널이 보낸 메시지를 `(task, pid, cpu, flags, ts, msg)` 튜플로 받아, 한글 출력은 **Python 쪽**에서 한다. "커널은 신호만, 표현은 사용자 공간" 이라는 역할 분리가 한눈에 보인다. (이 예제는 맵을 안 쓰는 `trace_pipe` 방식이고, 다음 `open_audit.py` 에서 맵·perf 로 넘어간다.)
 
 ### open_audit.py (labs) — perf 이벤트 + 진입/반환 짝짓기
 
-`labs/05_파일IO/open_audit.py` 는 openat 의 **진입에서 경로·플래그를 잡고, 반환에서 결과 fd 를 짝지어** 한 줄로 내보내는 감사기입니다. 7주차 `openat_latency.bt` 의 짝짓기 패턴이 여기서는 `BPF_HASH`(진행 중 정보 보관) + `BPF_PERF_OUTPUT`(완성된 이벤트 스트리밍)으로 구현됩니다.
+`labs/05_파일IO/open_audit.py` 는 openat 의 **진입에서 경로·플래그를 잡고, 반환에서 결과 fd 를 짝지어** 한 줄로 내보내는 감사기다. 7주차 `openat_latency.bt` 의 짝짓기 패턴이 여기서는 `BPF_HASH`(진행 중 정보 보관) + `BPF_PERF_OUTPUT`(완성된 이벤트 스트리밍)으로 구현된다.
 
 **커널 C — `BPF_TEXT` 의 enter/exit_openat 짝짓기 + perf_submit:**
 
@@ -494,9 +494,9 @@ TRACEPOINT_PROBE(syscalls, sys_exit_openat) {
 """
 ```
 
-- **진입(`sys_enter_openat`)**: 경로(`args->filename` → `bpf_probe_read_user_str`)와 플래그를 `struct val_t` 에 담아, `pid_tgid` 를 키로 **`active` 맵에 저장**합니다. 아직 결과(fd)를 모르니 맵에 임시 보관하는 것입니다.
-- **반환(`sys_exit_openat`)**: 같은 `pid_tgid` 로 `active.lookup` 해 **진입 때 저장한 정보를 되찾고**(`if (!vp) return 0` 으로 짝이 없으면 무시), 결과 fd(`args->ret`)·`comm` 을 합쳐 `event_t` 를 완성합니다. `events.perf_submit(args, &e, ...)` 로 **완성된 한 건을 즉시 사용자 공간으로** 보내고, `active.delete(&id)` 로 짝을 지웁니다.
-- 즉 **맵(`BPF_HASH active`)은 진입·반환을 잇는 임시 저장소**, **perf(`BPF_PERF_OUTPUT events`)는 완성된 이벤트의 스트리밍 채널**입니다. 7주차 `openat_latency.bt` 의 `@start[tid]` 와 같은 발상이지만, 여기서는 단순 집계가 아니라 개별 이벤트를 통째로 내보냅니다(5절의 맵 vs perf 대비).
+- **진입(`sys_enter_openat`)**: 경로(`args->filename` → `bpf_probe_read_user_str`)와 플래그를 `struct val_t` 에 담아, `pid_tgid` 를 키로 **`active` 맵에 저장**한다. 아직 결과(fd)를 모르니 맵에 임시 보관하는 것이다.
+- **반환(`sys_exit_openat`)**: 같은 `pid_tgid` 로 `active.lookup` 해 **진입 때 저장한 정보를 되찾고**(`if (!vp) return 0` 으로 짝이 없으면 무시), 결과 fd(`args->ret`)·`comm` 을 합쳐 `event_t` 를 완성한다. `events.perf_submit(args, &e, ...)` 로 **완성된 한 건을 즉시 사용자 공간으로** 보내고, `active.delete(&id)` 로 짝을 지운다.
+- 즉 **맵(`BPF_HASH active`)은 진입·반환을 잇는 임시 저장소**, **perf(`BPF_PERF_OUTPUT events`)는 완성된 이벤트의 스트리밍 채널**이다. 7주차 `openat_latency.bt` 의 `@start[tid]` 와 같은 발상이지만, 여기서는 단순 집계가 아니라 개별 이벤트를 통째로 내보낸다(5절의 맵 vs perf 대비).
 
 **Python — perf 폴링·출력:**
 
@@ -526,8 +526,8 @@ TRACEPOINT_PROBE(syscalls, sys_exit_openat) {
     return 0
 ```
 
-- **`handle` 콜백**: `bpf["events"].event(data)` 로 원시 바이트를 `event_t` 구조체로 복원하고, ctypes 필드(`e.comm`·`e.ret`·`e.fname`)를 꺼내 한 줄로 출력합니다. 음수 fd 는 `(실패)` 로 표시합니다.
-- **`open_perf_buffer(handle)` + `perf_buffer_poll(timeout=200)`**: 6-2절의 폴링 패턴 그대로 — 콜백을 등록한 뒤 주기적으로 폴링하면 커널이 쌓아둔 이벤트가 `handle` 로 밀려옵니다(push). 집계형 맵 읽기(`items()`)와 달리, 개별 이벤트가 발생 순서대로 흘러나오는 **스트리밍** 방식입니다.
+- **`handle` 콜백**: `bpf["events"].event(data)` 로 원시 바이트를 `event_t` 구조체로 복원하고, ctypes 필드(`e.comm`·`e.ret`·`e.fname`)를 꺼내 한 줄로 출력한다. 음수 fd 는 `(실패)` 로 표시한다.
+- **`open_perf_buffer(handle)` + `perf_buffer_poll(timeout=200)`**: 6-2절의 폴링 패턴 그대로 — 콜백을 등록한 뒤 주기적으로 폴링하면 커널이 쌓아둔 이벤트가 `handle` 로 밀려온다(push). 집계형 맵 읽기(`items()`)와 달리, 개별 이벤트가 발생 순서대로 흘러나오는 **스트리밍** 방식이다.
 
 ---
 
@@ -553,7 +553,7 @@ TRACEPOINT_PROBE(syscalls, sys_exit_openat) {
 
 ## 🛠 실습 과제 (VM 에서 직접 — `ssh ossca-ebpf` 기반)
 
-> Mac 에서 VM 을 켜고(`tart run ossca-ebpf-work --no-graphics &`) `ssh ossca-ebpf` 로 접속한 뒤 진행하세요. 모두 `sudo` 필요.
+> Mac 에서 VM 을 켜고(`tart run ossca-ebpf-work --no-graphics &`) `ssh ossca-ebpf` 로 접속한 뒤 진행한다. 모두 `sudo` 필요.
 
 **과제 1. 미니 BCC 작성·실행.** 7절의 `execve_by_comm.py` 를 직접 작성해 실행하고, 다른 창에서 `ls`·`whoami`·`cat /etc/hostname` 을 몇 번 실행한 뒤 `Ctrl-C` 로 집계를 확인하라.
 
@@ -581,7 +581,7 @@ sudo python3 netflow.py --duration 10
 
 ### 심화 과제 (목표 / 명령 / 관찰 / 질문)
 
-> `~/ebpf-labs/examples` 와 `~/ebpf-labs/labs` 의 BCC 도구를 직접 만지는 세트입니다. `ssh ossca-ebpf` 로 접속해 진행하세요.
+> `~/ebpf-labs/examples` 와 `~/ebpf-labs/labs` 의 BCC 도구를 직접 만지는 세트다. `ssh ossca-ebpf` 로 접속해 진행한다.
 
 **심화 1. `hello_bcc.py` 실행하고 출력 부분 수정.**
 
@@ -663,4 +663,4 @@ perf 이벤트(BPF_PERF_OUTPUT)를 쓴다. 다만 버퍼가 넘치면 이벤트�
 
 ## ⏭ 다음 주 예고
 
-[9주차](09주차_실습1_시스템콜_추적기.md)에서는 이번 주에 골격을 본 **실습① 시스템콜 추적기**를 처음부터 끝까지 해부합니다. `raw_syscalls:sys_enter` 트레이스포인트, `BPF_HASH` 집계, `BPF_ARRAY` 필터 주입, 그리고 "내가 N번 부른 걸 추적기가 N번 잡았나" 를 코드로 증명하는 **자기검증(verify.py)** 까지 직접 돌려봅니다. 이어 [10주차](10주차_실습2_네트워크_연결_추적기.md)에서 perf 이벤트 기반 실습②로 넘어갑니다.
+[9주차](09주차_실습1_시스템콜_추적기.md)에서는 이번 주에 골격을 본 **실습① 시스템콜 추적기**를 처음부터 끝까지 해부한다. `raw_syscalls:sys_enter` 트레이스포인트, `BPF_HASH` 집계, `BPF_ARRAY` 필터 주입, 그리고 "내가 N번 부른 걸 추적기가 N번 잡았나" 를 코드로 증명하는 **자기검증(verify.py)** 까지 직접 돌려본다. 이어 [10주차](10주차_실습2_네트워크_연결_추적기.md)에서 perf 이벤트 기반 실습②로 넘어간다.

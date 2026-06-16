@@ -1,6 +1,6 @@
 # 7주차 — bpftrace 입문: 한 줄 추적
 
-> bpftrace 는 "커널을 위한 awk" 입니다. 컴파일·로더 코드 없이 한 줄로 시스템콜·함수·지연을 추적합니다. 이번 주는 손가락이 기억할 만큼 원라이너를 많이 쳐봅니다.
+> bpftrace 는 "커널을 위한 awk" 다. 컴파일·로더 코드 없이 한 줄로 시스템콜·함수·지연을 추적한다. 이번 주는 손가락이 기억할 만큼 원라이너를 많이 쳐본다.
 
 last_updated: 2026-06-11
 
@@ -20,13 +20,13 @@ last_updated: 2026-06-11
 - 맵 `@` 와 집계 함수(`count`, `sum`, `avg`, `hist`, `lhist`)로 데이터를 모은다.
 - 대표 원라이너 5개 이상을 직접 실행하고 출력을 해석할 수 있다.
 
-> [6주차](06주차_개발환경_VM_BTF_CO-RE개념.md)에서 준비한 VM 위에서 진행합니다. bpftrace 는 내부적으로 BTF·검증기·JIT([4주차](04주차_eBPF_아키텍처_검증기_JIT_맵_헬퍼.md))를 모두 쓰지만, 우리는 그 위에서 **한 줄 언어**만 다룹니다.
+> [6주차](06주차_개발환경_VM_BTF_CO-RE개념.md)에서 준비한 VM 위에서 진행한다. bpftrace 는 내부적으로 BTF·검증기·JIT([4주차](04주차_eBPF_아키텍처_검증기_JIT_맵_헬퍼.md))를 모두 쓰지만, 우리는 그 위에서 **한 줄 언어**만 다룬다.
 
 ---
 
 ## 1. bpftrace 란 무엇인가 — 커널을 위한 awk
 
-bpftrace 는 **고수준 추적 언어**입니다. C 로 eBPF 를 짜고 파이썬으로 로더를 쓰는 대신, **awk 처럼 짧은 스크립트 한 줄**로 추적기를 표현하면, bpftrace 가 그것을 eBPF 프로그램으로 컴파일해 커널에 부착하고, 결과를 모아 터미널에 찍어 줍니다.
+bpftrace 는 **고수준 추적 언어**다. C 로 eBPF 를 짜고 파이썬으로 로더를 쓰는 대신, **awk 처럼 짧은 스크립트 한 줄**로 추적기를 표현하면, bpftrace 가 그것을 eBPF 프로그램으로 컴파일해 커널에 부착하고, 결과를 모아 터미널에 찍어 준다.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
@@ -43,9 +43,9 @@ flowchart LR
 | BCC | 중간 | Python + C 문자열 | 좀 더 복잡한 도구 만들기 ([8주차](08주차_BCC_입문_맵과_perf이벤트.md)) |
 | libbpf+CO-RE | 낮음(C) | C + 빌드 | 운영 배포 ([11주차](11주차_libbpf와_CO-RE_프로덕션eBPF.md)) |
 
-> 비유: bpftrace 의 `@[comm] = count()` 는 awk 의 `arr[$1]++` 와 거의 같은 감각입니다. "어떤 키별로 세어 모은다" 는 발상이 똑같습니다.
+> 비유: bpftrace 의 `@[comm] = count()` 는 awk 의 `arr[$1]++` 와 거의 같은 감각이다. "어떤 키별로 세어 모은다" 는 발상이 똑같다.
 
-**한 줄이 커널까지 가는 길 — bpftrace 내부 동작.** bpftrace 가 "마법"처럼 보이지만, 우리가 [4주차](04주차_eBPF_아키텍처_검증기_JIT_맵_헬퍼.md)에서 배운 파이프라인을 자동화한 것뿐입니다. 우리가 친 한 줄은 다음 단계를 거칩니다.
+**한 줄이 커널까지 가는 길 — bpftrace 내부 동작.** bpftrace 가 "마법"처럼 보이지만, 우리가 [4주차](04주차_eBPF_아키텍처_검증기_JIT_맵_헬퍼.md)에서 배운 파이프라인을 자동화한 것뿐이다. 우리가 친 한 줄은 다음 단계를 거친다.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
@@ -61,11 +61,11 @@ flowchart LR
 2. 이를 **LLVM IR** 로 코드 생성한 뒤,
 3. **LLVM BPF 백엔드**로 eBPF 바이트코드를 뽑고,
 4. `bpf()` 시스템콜로 커널에 **로드**하면 검증기·JIT 를 거쳐 프로브에 **부착**되며,
-5. 실행 중 모인 맵을 bpftrace 가 읽어 **출력**합니다.
+5. 실행 중 모인 맵을 bpftrace 가 읽어 **출력**한다.
 
-> 즉 bpftrace 도 BCC 처럼 내부에서 **LLVM 으로 eBPF 를 생성**합니다. 차이는 "C 를 직접 쓰느냐(BCC)" vs "고수준 한 줄 언어를 bpftrace 가 대신 IR 로 바꿔주느냐"입니다. 컴파일은 `bpftrace` 실행 시점에 일어나므로, 첫 실행이 잠깐 느린 것도 이 때문입니다.
+> 즉 bpftrace 도 BCC 처럼 내부에서 **LLVM 으로 eBPF 를 생성**한다. 차이는 "C 를 직접 쓰느냐(BCC)" vs "고수준 한 줄 언어를 bpftrace 가 대신 IR 로 바꿔주느냐"다. 컴파일은 `bpftrace` 실행 시점에 일어나므로, 첫 실행이 잠깐 느린 것도 이 때문이다.
 
-먼저 VM 에서 버전을 확인하고, 어떤 프로브가 있는지 목록을 살펴봅니다.
+먼저 VM 에서 버전을 확인하고, 어떤 프로브가 있는지 목록을 살펴본다.
 
 ```bash
 # (VM 안에서)
@@ -78,7 +78,7 @@ sudo bpftrace -l 'kprobe:tcp_*' | head                # tcp_ 로 시작하는 kp
 
 ## 2. 프로그램 해부 — probe / filter / action
 
-bpftrace 한 줄은 세 부분으로 이뤄집니다.
+bpftrace 한 줄은 세 부분으로 이뤄진다.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
@@ -101,14 +101,14 @@ flowchart LR
 sudo bpftrace -e 'tracepoint:syscalls:sys_enter_execve { printf("%s (pid %d) 실행\n", comm, pid); }'
 ```
 
-`comm` 은 현재 프로세스 이름, `pid` 는 PID 입니다. 필터를 붙여 특정 프로세스만 보려면:
+`comm` 은 현재 프로세스 이름, `pid` 는 PID 다. 필터를 붙여 특정 프로세스만 보려면:
 
 ```bash
 # bash 가 부른 execve 만
 sudo bpftrace -e 'tracepoint:syscalls:sys_enter_execve /comm == "bash"/ { printf("%s\n", str(args.filename)); }'
 ```
 
-> `str(args.filename)` 처럼 `args.<필드>` 로 트레이스포인트 인자를 읽습니다. 어떤 인자가 있는지는 `sudo bpftrace -lv tracepoint:syscalls:sys_enter_execve` 로 확인합니다.
+> `str(args.filename)` 처럼 `args.<필드>` 로 트레이스포인트 인자를 읽는다. 어떤 인자가 있는지는 `sudo bpftrace -lv tracepoint:syscalls:sys_enter_execve` 로 확인한다.
 
 ---
 
@@ -137,13 +137,13 @@ flowchart TB
     TP & KP & UP & TIMER --> ACT["action { ... }"]
 ```
 
-> 안정성 차이: `tracepoint:` 는 커널이 유지를 약속한 인터페이스라 버전이 바뀌어도 잘 깨지지 않습니다. `kprobe:` 는 임의 함수에 붙는 만큼 강력하지만, 함수 이름·시그니처가 커널 버전에 따라 바뀔 수 있어 더 깨지기 쉽습니다. 실습①([9주차](09주차_실습1_시스템콜_추적기.md))은 `tracepoint`, 실습②([10주차](10주차_실습2_네트워크_연결_추적기.md))는 `kprobe` 를 씁니다.
+> 안정성 차이: `tracepoint:` 는 커널이 유지를 약속한 인터페이스라 버전이 바뀌어도 잘 깨지지 않는다. `kprobe:` 는 임의 함수에 붙는 만큼 강력하지만, 함수 이름·시그니처가 커널 버전에 따라 바뀔 수 있어 더 깨지기 쉽다. 실습①([9주차](09주차_실습1_시스템콜_추적기.md))은 `tracepoint`, 실습②([10주차](10주차_실습2_네트워크_연결_추적기.md))는 `kprobe` 를 쓴다.
 
 ---
 
 ## 4. 빌트인 변수
 
-bpftrace 는 자주 쓰는 값을 미리 변수로 줍니다.
+bpftrace 는 자주 쓰는 값을 미리 변수로 준다.
 
 | 변수 | 의미 |
 |:---|:---|
@@ -156,7 +156,7 @@ bpftrace 는 자주 쓰는 값을 미리 변수로 줍니다.
 | `retval` | (kretprobe/return) 함수 반환값 |
 | `cpu` | 현재 CPU 번호 |
 
-위 표 외에도 자주 쓰는 빌트인 변수가 더 있습니다. 한 번에 정리해 둡니다.
+위 표 외에도 자주 쓰는 빌트인 변수가 더 있다. 한 번에 정리해 둔다.
 
 | 변수 | 의미 | 비고 |
 |:---|:---|:---|
@@ -169,9 +169,9 @@ bpftrace 는 자주 쓰는 값을 미리 변수로 줍니다.
 | `func` | 현재 프로브가 붙은 함수 이름 | 와일드카드 프로브에서 유용 |
 | `probe` | 현재 프로브 전체 이름 문자열 | 어떤 프로브가 찍혔는지 식별 |
 
-> `arg0` vs `args` 구분이 중요합니다. `kprobe:` 에는 타입 정보가 없어 `arg0`(첫 인자 레지스터 값)을 직접 받아 `(struct file *)arg0` 처럼 **캐스팅**해 씁니다. 반면 `tracepoint:` 는 커널이 인자 포맷을 공개하므로 `args.<필드>` 로 **타입 안전하게** 읽습니다(예: `args.id`, `args.filename`). 그래서 안정성뿐 아니라 사용 편의에서도 tracepoint 가 유리합니다.
+> `arg0` vs `args` 구분이 중요하다. `kprobe:` 에는 타입 정보가 없어 `arg0`(첫 인자 레지스터 값)을 직접 받아 `(struct file *)arg0` 처럼 **캐스팅**해 쓴다. 반면 `tracepoint:` 는 커널이 인자 포맷을 공개하므로 `args.<필드>` 로 **타입 안전하게** 읽는다(예: `args.id`, `args.filename`). 그래서 안정성뿐 아니라 사용 편의에서도 tracepoint 가 유리하다.
 
-**필터·삼항·문자열·구조체 접근.** action 안에서 awk 처럼 조건 분기를 쓸 수 있습니다.
+**필터·삼항·문자열·구조체 접근.** action 안에서 awk 처럼 조건 분기를 쓸 수 있다.
 
 ```bash
 # 삼항 연산자: 읽기 성공/실패를 한 줄로 분류
@@ -190,9 +190,9 @@ kprobe:vfs_open {
 }'
 ```
 
-> `str()` 은 커널/사용자 메모리의 **널 종료 문자열**을 안전하게 읽어 옵니다. `$path` 처럼 `$` 로 시작하는 것은 **스크래치 지역 변수**(맵 `@` 와 달리 출력되지 않고 이벤트 처리 동안만 삽니다). `->` 로 구조체 필드를 따라가면 bpftrace 가 내부적으로 `bpf_probe_read_kernel` 헬퍼 호출로 바꿔 줍니다.
+> `str()` 은 커널/사용자 메모리의 **널 종료 문자열**을 안전하게 읽어 온다. `$path` 처럼 `$` 로 시작하는 것은 **스크래치 지역 변수**(맵 `@` 와 달리 출력되지 않고 이벤트 처리 동안만 산다). `->` 로 구조체 필드를 따라가면 bpftrace 가 내부적으로 `bpf_probe_read_kernel` 헬퍼 호출로 바꿔 준다.
 
-집계 함수도 표보다 더 있습니다. `stats(x)` 는 count·avg·total 을 한 번에 주고, `min`/`max` 와 함께 분포의 양 끝을 잡습니다.
+집계 함수도 표보다 더 있다. `stats(x)` 는 count·avg·total 을 한 번에 주고, `min`/`max` 와 함께 분포의 양 끝을 잡는다.
 
 | 추가 집계 | 하는 일 |
 |:---|:---|
@@ -201,16 +201,16 @@ kprobe:vfs_open {
 | `clear(@m)` | 맵 전체 비우기(주기 출력 후 리셋) |
 | `print(@m)` / `print(@m, n)` | 맵(상위 n개) 즉시 출력 |
 
-**확률적 샘플링 — `profile:hz`.** 모든 이벤트를 잡는 대신 **고정 주파수로 표본만** 뜨면, 부하를 크게 낮추면서 "어디서 시간을 쓰나"를 통계적으로 알 수 있습니다.
+**확률적 샘플링 — `profile:hz`.** 모든 이벤트를 잡는 대신 **고정 주파수로 표본만** 뜨면, 부하를 크게 낮추면서 "어디서 시간을 쓰나"를 통계적으로 알 수 있다.
 
 ```bash
 # 모든 CPU 에서 초당 99회 스택을 표집 → 어떤 함수가 자주 잡히나(=CPU 점유)
 sudo bpftrace -e 'profile:hz:99 { @[comm] = count(); }'
 ```
 
-> 99Hz 처럼 100의 약수를 피한 **소수에 가까운 주파수**를 쓰는 관행이 있습니다. 100Hz 같은 값은 100Hz 로 도는 커널 타이머와 박자가 겹쳐(lockstep) 특정 작업만 반복 표집되는 **에일리어싱**을 일으킬 수 있어서입니다. 표집은 전수 측정이 아니므로 결과는 "비율의 추정치"로 읽습니다.
+> 99Hz 처럼 100의 약수를 피한 **소수에 가까운 주파수**를 쓰는 관행이 있다. 100Hz 같은 값은 100Hz 로 도는 커널 타이머와 박자가 겹쳐(lockstep) 특정 작업만 반복 표집되는 **에일리어싱**을 일으킬 수 있어서다. 표집은 전수 측정이 아니므로 결과는 "비율의 추정치"로 읽는다.
 
-지연(latency) 측정의 기본 패턴 — `nsecs` 로 진입·반환 시각을 빼면 함수가 얼마나 걸렸는지 알 수 있습니다.
+지연(latency) 측정의 기본 패턴 — `nsecs` 로 진입·반환 시각을 빼면 함수가 얼마나 걸렸는지 알 수 있다.
 
 ```bash
 # vfs_read 함수가 호출되고 반환되기까지 걸린 시간을 히스토그램으로
@@ -222,13 +222,13 @@ kretprobe:vfs_read /@start[tid]/ {
 }'
 ```
 
-> `@start[tid]` 에 진입 시각을 저장했다가, 반환 시 빼서 소요 시간을 구합니다. `tid` 를 키로 쓰는 이유: 같은 함수가 여러 스레드에서 동시에 돌 수 있어 스레드별로 시각을 따로 보관해야 하기 때문입니다.
+> `@start[tid]` 에 진입 시각을 저장했다가, 반환 시 빼서 소요 시간을 구한다. `tid` 를 키로 쓰는 이유: 같은 함수가 여러 스레드에서 동시에 돌 수 있어 스레드별로 시각을 따로 보관해야 하기 때문이다.
 
 ---
 
 ## 5. 맵 `@` 와 집계 함수
 
-`@` 로 시작하는 이름이 **맵**입니다(커널 속 집계표). `@name` 은 스칼라, `@name[key]` 는 키별 맵입니다. bpftrace 는 프로그램이 끝날 때(`END` 또는 Ctrl-C) **남은 맵을 자동으로 출력**합니다.
+`@` 로 시작하는 이름이 **맵**이다(커널 속 집계표). `@name` 은 스칼라, `@name[key]` 는 키별 맵이다. bpftrace 는 프로그램이 끝날 때(`END` 또는 Ctrl-C) **남은 맵을 자동으로 출력**한다.
 
 | 집계 함수 | 하는 일 | 출력 형태 |
 |:---|:---|:---|
@@ -246,13 +246,13 @@ flowchart LR
     MAP -->|"END / Ctrl-C 시 자동 덤프"| OUT["터미널 출력\n(키별 값)"]
 ```
 
-데이터가 **커널의 맵에 모였다가, 종료 시점에 한 번에 사용자 공간으로** 넘어옵니다. 이벤트 하나하나를 실시간으로 보내지 않으므로(집계형), 초당 수만 건이 발생해도 가볍습니다. *개별 이벤트를 실시간 스트림으로 받고 싶을 때* 는 다른 방식(perf 이벤트)을 쓰는데, 이는 [8주차](08주차_BCC_입문_맵과_perf이벤트.md)에서 다룹니다.
+데이터가 **커널의 맵에 모였다가, 종료 시점에 한 번에 사용자 공간으로** 넘어온다. 이벤트 하나하나를 실시간으로 보내지 않으므로(집계형), 초당 수만 건이 발생해도 가볍다. *개별 이벤트를 실시간 스트림으로 받고 싶을 때* 는 다른 방식(perf 이벤트)을 쓰는데, 이는 [8주차](08주차_BCC_입문_맵과_perf이벤트.md)에서 다룬다.
 
 ---
 
 ## 6. 대표 원라이너 (실행 가능)
 
-아래는 VM 에서 바로 칠 수 있는 예제들입니다. 각 예제에 **기대 출력**을 함께 설명합니다. (모두 `sudo` 필요)
+아래는 VM 에서 바로 칠 수 있는 예제들이다. 각 예제에 **기대 출력**을 함께 설명한다. (모두 `sudo` 필요)
 
 ### 6-1. 시스템콜 카운트 — "지금 누가 가장 바쁜가"
 
@@ -260,7 +260,7 @@ flowchart LR
 sudo bpftrace -e 'tracepoint:raw_syscalls:sys_enter { @[comm] = count(); }'
 ```
 
-몇 초 두었다가 `Ctrl-C` 를 누르면, 프로세스 이름별 시스템콜 총 호출 수가 많은 순으로 정렬돼 나옵니다.
+몇 초 두었다가 `Ctrl-C` 를 누르면, 프로세스 이름별 시스템콜 총 호출 수가 많은 순으로 정렬돼 나온다.
 
 ```text
 @[bpftrace]: 142
@@ -268,7 +268,7 @@ sudo bpftrace -e 'tracepoint:raw_syscalls:sys_enter { @[comm] = count(); }'
 @[systemd]: 911
 ```
 
-> 이 한 줄이 바로 실습①([9주차](09주차_실습1_시스템콜_추적기.md))의 축소판입니다. 실습① BCC 코드도 같은 `raw_syscalls:sys_enter` 트레이스포인트에서 `(PID, 시스템콜)` 별로 셉니다.
+> 이 한 줄이 바로 실습①([9주차](09주차_실습1_시스템콜_추적기.md))의 축소판이다. 실습① BCC 코드도 같은 `raw_syscalls:sys_enter` 트레이스포인트에서 `(PID, 시스템콜)` 별로 센다.
 
 ### 6-2. 시스템콜 번호별 카운트 — "무슨 시스템콜이 많은가"
 
@@ -276,7 +276,7 @@ sudo bpftrace -e 'tracepoint:raw_syscalls:sys_enter { @[comm] = count(); }'
 sudo bpftrace -e 'tracepoint:raw_syscalls:sys_enter { @[args.id] = count(); }'
 ```
 
-`args.id` 는 시스템콜 **번호**입니다(예: 읽기/쓰기/열기 등). 번호별 호출량이 나옵니다. 이름으로 보고 싶으면 6-1 처럼 `comm`, 또는 개별 시스템콜 트레이스포인트(`sys_enter_openat` 등)를 직접 겁니다.
+`args.id` 는 시스템콜 **번호**다(예: 읽기/쓰기/열기 등). 번호별 호출량이 나온다. 이름으로 보고 싶으면 6-1 처럼 `comm`, 또는 개별 시스템콜 트레이스포인트(`sys_enter_openat` 등)를 직접 건다.
 
 ### 6-3. 파일 열기 추적 (opensnoop 류)
 
@@ -287,7 +287,7 @@ tracepoint:syscalls:sys_enter_openat {
 }'
 ```
 
-다른 창에서 `cat /etc/hostname` 같은 명령을 실행하면, 어떤 프로세스가 어떤 파일을 여는지 실시간으로 한 줄씩 찍힙니다.
+다른 창에서 `cat /etc/hostname` 같은 명령을 실행하면, 어떤 프로세스가 어떤 파일을 여는지 실시간으로 한 줄씩 찍힌다.
 
 ```text
 cat              pid=4821    /etc/hostname
@@ -303,7 +303,7 @@ tracepoint:syscalls:sys_enter_execve {
 }'
 ```
 
-새 프로그램이 실행될 때마다(셸에서 명령을 칠 때마다) 한 줄씩 나옵니다. "지금 이 시스템에서 무엇이 실행되고 있나" 를 보는 보안 관측의 기초입니다.
+새 프로그램이 실행될 때마다(셸에서 명령을 칠 때마다) 한 줄씩 나온다. "지금 이 시스템에서 무엇이 실행되고 있나" 를 보는 보안 관측의 기초다.
 
 ### 6-5. 시스템콜 지연 히스토그램
 
@@ -316,7 +316,7 @@ tracepoint:raw_syscalls:sys_exit /@start[tid]/ {
 }'
 ```
 
-`Ctrl-C` 시 시스템콜 1건 처리에 걸린 시간 분포가 막대 히스토그램으로 나옵니다. 대부분 짧고 일부가 길다는 식의 **꼬리 분포** 를 한눈에 봅니다.
+`Ctrl-C` 시 시스템콜 1건 처리에 걸린 시간 분포가 막대 히스토그램으로 나온다. 대부분 짧고 일부가 길다는 식의 **꼬리 분포** 를 한눈에 본다.
 
 ```text
 @ns:
@@ -325,7 +325,7 @@ tracepoint:raw_syscalls:sys_exit /@start[tid]/ {
 [1K, 2K)            88 |@@@                                     |
 ```
 
-> 읽는 법: 왼쪽 `[256, 512)` 는 256~512 나노초 구간, 가운데 숫자는 그 구간에 든 건수, 막대는 상대 비율입니다.
+> 읽는 법: 왼쪽 `[256, 512)` 는 256~512 나노초 구간, 가운데 숫자는 그 구간에 든 건수, 막대는 상대 비율이다.
 
 ### 6-6. (보너스) 1초마다 TCP 연결 시도 카운트
 
@@ -335,13 +335,13 @@ kprobe:tcp_v4_connect { @conn[comm] = count(); }
 interval:s:1 { print(@conn); clear(@conn); }'
 ```
 
-`kprobe:tcp_v4_connect` 는 실습②([10주차](10주차_실습2_네트워크_연결_추적기.md))가 거는 바로 그 함수입니다. 다른 창에서 `curl --max-time 2 http://127.0.0.1:22` 를 해보면 1초마다 프로세스별 연결 시도 수가 찍힙니다.
+`kprobe:tcp_v4_connect` 는 실습②([10주차](10주차_실습2_네트워크_연결_추적기.md))가 거는 바로 그 함수다. 다른 창에서 `curl --max-time 2 http://127.0.0.1:22` 를 해보면 1초마다 프로세스별 연결 시도 수가 찍힌다.
 
 ---
 
 ### 📸 실제 실행 화면 (터미널 스크린샷)
 
-> 아래는 이 강의 환경(Ubuntu 24.04 / 커널 6.17 / aarch64)에서 **실제 터미널을 열어 bpftrace 를 실행한 화면을 그대로 캡처(screencapture)** 한 것입니다.
+> 아래는 이 강의 환경(Ubuntu 24.04 / 커널 6.17 / aarch64)에서 **실제 터미널을 열어 bpftrace 를 실행한 화면을 그대로 캡처(screencapture)** 한 것이다.
 
 ![hello.bt — 새 프로그램이 실행될 때마다 한 줄 출력](images/shot_hello.png)
 
@@ -353,7 +353,7 @@ interval:s:1 { print(@conn); clear(@conn); }'
 
 ## 💻 코드로 보기 — bpftrace 예제 전문
 
-지금까지 본 원라이너들은 사실 `examples/` 폴더에 **완성된 `.bt` 스크립트**로 들어 있습니다. 아래 네 예제는 전부 `examples/` 에 있고, `sudo bpftrace <파일>.bt` 로 바로 실행할 수 있습니다. 각 코드에서 **probe(언제) / filter(조건) / action(무엇을)** 가 어디인지 짚어 보겠습니다.
+지금까지 본 원라이너들은 사실 `examples/` 폴더에 **완성된 `.bt` 스크립트**로 들어 있다. 아래 네 예제는 전부 `examples/` 에 있고, `sudo bpftrace <파일>.bt` 로 바로 실행할 수 있다. 각 코드에서 **probe(언제) / filter(조건) / action(무엇을)** 가 어디인지 짚어 본다.
 
 ### hello.bt — 가장 단순한 반응 (execve 마다 인사)
 
@@ -388,9 +388,9 @@ END {
 }
 ```
 
-- **probe** = `tracepoint:syscalls:sys_enter_execve` (누군가 새 프로그램을 실행하려는 순간). `BEGIN`/`END` 는 시작·종료 시 1회 도는 특수 probe입니다.
-- **filter** 는 없습니다(모든 execve 를 잡음). 조건 없이 항상 action 을 실행합니다.
-- **action** = `{ printf(...) }`. `pid`·`comm` 빌트인과 `str(args.filename)`(열린 인자 문자열)을 찍습니다.
+- **probe** = `tracepoint:syscalls:sys_enter_execve` (누군가 새 프로그램을 실행하려는 순간). `BEGIN`/`END` 는 시작·종료 시 1회 도는 특수 probe다.
+- **filter** 는 없다(모든 execve 를 잡음). 조건 없이 항상 action 을 실행한다.
+- **action** = `{ printf(...) }`. `pid`·`comm` 빌트인과 `str(args.filename)`(열린 인자 문자열)을 찍는다.
 
 ### opensnoop.bt — 어떤 프로세스가 어떤 파일을 여나 (스트리밍)
 
@@ -421,9 +421,9 @@ tracepoint:syscalls:sys_enter_openat {
 }
 ```
 
-- **probe** = `tracepoint:syscalls:sys_enter_openat` (파일 열기 진입점). arm64 는 `open` 대신 `openat` 을 씁니다.
-- **filter** 는 없지만, 주석의 한 줄 예처럼 `/comm=="cat"/` 를 붙이면 특정 프로세스만 거를 수 있습니다.
-- **action** 은 `comm`·`pid`·`str(args.filename)` 을 한 줄씩 즉시 출력 — 집계 없이 **이벤트마다 스트리밍**하는 형태입니다.
+- **probe** = `tracepoint:syscalls:sys_enter_openat` (파일 열기 진입점). arm64 는 `open` 대신 `openat` 을 쓴다.
+- **filter** 는 없지만, 주석의 한 줄 예처럼 `/comm=="cat"/` 를 붙이면 특정 프로세스만 거를 수 있다.
+- **action** 은 `comm`·`pid`·`str(args.filename)` 을 한 줄씩 즉시 출력 — 집계 없이 **이벤트마다 스트리밍**하는 형태다.
 
 ### syscall_top.bt — 프로세스별 시스템콜 집계 (맵)
 
@@ -460,8 +460,8 @@ END {
 ```
 
 - **probe** = `tracepoint:raw_syscalls:sys_enter` (모든 시스템콜의 공통 입구).
-- **filter** 는 없습니다.
-- **action** = `@by_process[comm] = count()` — `comm` 을 키로 하는 **맵 `@`** 에 1씩 누적합니다. opensnoop 과 달리 줄을 찍지 않고 커널에 모았다가, `END`(또는 Ctrl-C)에서 bpftrace 가 자동 정렬·출력합니다. 이것이 5절에서 본 **집계형**입니다.
+- **filter** 는 없다.
+- **action** = `@by_process[comm] = count()` — `comm` 을 키로 하는 **맵 `@`** 에 1씩 누적한다. opensnoop 과 달리 줄을 찍지 않고 커널에 모았다가, `END`(또는 Ctrl-C)에서 bpftrace 가 자동 정렬·출력한다. 이것이 5절에서 본 **집계형**이다.
 
 ### openat_latency.bt — openat 지연 히스토그램 (진입·반환 짝짓기)
 
@@ -503,9 +503,9 @@ END {
 }
 ```
 
-- **probe** 가 둘입니다 — `sys_enter_openat`(진입)에서 `@start[tid] = nsecs` 로 시작 시각을 저장하고, `sys_exit_openat`(반환)에서 경과 시간을 계산합니다.
-- **filter** = `/@start[tid]/` — 진입 시각이 기록된 스레드일 때만 반환을 처리합니다(짝이 맞을 때만). `tid` 를 키로 써서 스레드별로 시각을 따로 보관합니다.
-- **action** = `@latency_ns = hist(nsecs - @start[tid])` 로 (반환−진입) 소요 시간을 히스토그램에 누적하고, `delete(@start[tid])` 로 짝을 지웁니다. 이 **진입·반환 짝짓기** 패턴이 8주차 BCC 의 `BPF_HASH` 짝맞춤으로 그대로 이어집니다.
+- **probe** 가 둘이다 — `sys_enter_openat`(진입)에서 `@start[tid] = nsecs` 로 시작 시각을 저장하고, `sys_exit_openat`(반환)에서 경과 시간을 계산한다.
+- **filter** = `/@start[tid]/` — 진입 시각이 기록된 스레드일 때만 반환을 처리한다(짝이 맞을 때만). `tid` 를 키로 써서 스레드별로 시각을 따로 보관한다.
+- **action** = `@latency_ns = hist(nsecs - @start[tid])` 로 (반환−진입) 소요 시간을 히스토그램에 누적하고, `delete(@start[tid])` 로 짝을 지운다. 이 **진입·반환 짝짓기** 패턴이 8주차 BCC 의 `BPF_HASH` 짝맞춤으로 그대로 이어진다.
 
 ---
 
@@ -532,7 +532,7 @@ END {
 
 ## 🛠 실습 과제 (VM 에서 직접 — `ssh ossca-ebpf` 기반)
 
-> Mac 에서 VM 을 켜고(`tart run ossca-ebpf-work --no-graphics &`) `ssh ossca-ebpf` 로 접속한 뒤, 아래 원라이너 5개를 실행·해석하세요. 모두 `sudo` 필요.
+> Mac 에서 VM 을 켜고(`tart run ossca-ebpf-work --no-graphics &`) `ssh ossca-ebpf` 로 접속한 뒤, 아래 원라이너 5개를 실행·해석한다. 모두 `sudo` 필요.
 
 **과제 1. 시스템콜 카운트.** 6-1 을 5초간 돌리고 상위 3개 프로세스 이름을 적어라.
 
@@ -553,11 +553,11 @@ tracepoint:raw_syscalls:sys_exit /@start[tid]/ {
     @ns = hist(nsecs - @start[tid]); delete(@start[tid]); }'
 ```
 
-**과제 5. TCP 연결 카운트.** 6-6 을 켜둔 채 다른 창에서 `curl --max-time 2 http://127.0.0.1:22` 를 몇 번 실행하고, `curl` 프로세스의 연결 시도 수가 올라가는지 확인하라. *(이 과제는 실습②의 예고편입니다.)*
+**과제 5. TCP 연결 카운트.** 6-6 을 켜둔 채 다른 창에서 `curl --max-time 2 http://127.0.0.1:22` 를 몇 번 실행하고, `curl` 프로세스의 연결 시도 수가 올라가는지 확인하라. *(이 과제는 실습②의 예고편이다.)*
 
 ### 심화 과제 (목표 / 명령 / 관찰 / 질문)
 
-> 아래는 `~/ebpf-labs/examples` 의 `.bt` 스크립트와 직접 작성을 결합한 심화 세트입니다. `ssh ossca-ebpf` 로 접속해 진행하세요.
+> 아래는 `~/ebpf-labs/examples` 의 `.bt` 스크립트와 직접 작성을 결합한 심화 세트다. `ssh ossca-ebpf` 로 접속해 진행한다.
 
 **심화 1. examples 의 `.bt` 5개 실행·해석.**
 
@@ -642,4 +642,4 @@ tracepoint 는 커널이 유지를 약속하는 안정적 인터페이스라 시
 
 ## ⏭ 다음 주 예고
 
-[8주차](08주차_BCC_입문_맵과_perf이벤트.md)에서는 한 줄을 넘어 **BCC** 로 넘어갑니다. Python 으로 로더를 쓰고 C 로 커널 코드를 짜며, **맵(집계)** 과 **perf 이벤트(스트리밍)** 의 차이를 배웁니다. bpftrace 에서 본 `@[comm]=count()` 가 BCC 의 `BPF_HASH` 로, 6-6 의 실시간 출력이 `BPF_PERF_OUTPUT` 으로 어떻게 이어지는지 확인하고, 실습①·②의 실제 코드를 읽기 시작합니다.
+[8주차](08주차_BCC_입문_맵과_perf이벤트.md)에서는 한 줄을 넘어 **BCC** 로 넘어간다. Python 으로 로더를 쓰고 C 로 커널 코드를 짜며, **맵(집계)** 과 **perf 이벤트(스트리밍)** 의 차이를 배운다. bpftrace 에서 본 `@[comm]=count()` 가 BCC 의 `BPF_HASH` 로, 6-6 의 실시간 출력이 `BPF_PERF_OUTPUT` 으로 어떻게 이어지는지 확인하고, 실습①·②의 실제 코드를 읽기 시작한다.

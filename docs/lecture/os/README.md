@@ -65,4 +65,4 @@ ls ~/ostep-homework            # cpu-sched, vm-paging, threads-locks, file-disks
 python3 ~/ostep-homework/cpu-sched/scheduler.py -p RR -q 1 -l 5,5,5 -c
 ```
 
-> 입문자는 [용어집](../00c_용어집_약어사전.md)·[C 미니부록](../00b_준비_C언어_미니부록.md)을 곁에 두세요.
+> 입문자는 [용어집](../00c_용어집_약어사전.md)·[C 미니부록](../00b_준비_C언어_미니부록.md)을 곁에 둔다.

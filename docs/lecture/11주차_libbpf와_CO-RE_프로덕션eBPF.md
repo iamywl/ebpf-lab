@@ -338,7 +338,7 @@ ls *.skel.h *.bpf.o 2>/dev/null
 
 ## ⚙️ 리눅스 커널은 로드 시점에 오브젝트를 재배치해 받아들인다
 
-libbpf+CO-RE 의 핵심은 "한 번 빌드한 오브젝트가 여러 커널에서 도는" 데 있습니다. 개발 머신에서 `.bpf.c` 를 **사전 컴파일**해 재배치 정보를 담은 오브젝트를 만들어 두고, 대상 커널에 로드할 때 libbpf 가 그 커널의 **BTF 를 대조해 오프셋을 다시 계산(재배치)** 한 뒤 검증기에 넘깁니다. 이벤트 전달에는 커널 5.8+ 에서 추가된 **ring buffer**(`BPF_MAP_TYPE_RINGBUF`)를 쓰는데, CPU 가 공유하는 단일 버퍼라 메모리 효율과 전역 순서에 유리합니다. 로드된 프로그램·맵·지원 기능은 **bpftool** 로 점검합니다.
+libbpf+CO-RE 의 핵심은 "한 번 빌드한 오브젝트가 여러 커널에서 도는" 데 있다. 개발 머신에서 `.bpf.c` 를 **사전 컴파일**해 재배치 정보를 담은 오브젝트를 만들어 두고, 대상 커널에 로드할 때 libbpf 가 그 커널의 **BTF 를 대조해 오프셋을 다시 계산(재배치)** 한 뒤 검증기에 넘긴다. 이벤트 전달에는 커널 5.8+ 에서 추가된 **ring buffer**(`BPF_MAP_TYPE_RINGBUF`)를 쓰는데, CPU 가 공유하는 단일 버퍼라 메모리 효율과 전역 순서에 유리하다. 로드된 프로그램·맵·지원 기능은 **bpftool** 로 점검한다.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
@@ -347,17 +347,17 @@ flowchart LR
     RELOC -->|"검증·JIT"| RUN["실행 (ring buffer 로 이벤트)"]
 ```
 
-소스/구조 측면에서, libbpf 는 커널 소스 트리(`tools/lib/bpf`)에서 함께 관리되는 C 라이브러리이며, 우리 VM(커널 6.17 aarch64)은 libbpf·bpftool·BTF 가 모두 준비되어 있습니다.
+소스/구조 측면에서, libbpf 는 커널 소스 트리(`tools/lib/bpf`)에서 함께 관리되는 C 라이브러리이며, 우리 VM(커널 6.17 aarch64)은 libbpf·bpftool·BTF 가 모두 준비되어 있다.
 
 ---
 
 ## 📸 실제 실행 화면 (실제 터미널 캡처)
 
-아래는 VM(커널 6.17 aarch64)에서 이 커널이 지원하는 eBPF 기능을 직접 조사한 모습입니다.
+아래는 VM(커널 6.17 aarch64)에서 이 커널이 지원하는 eBPF 기능을 직접 조사한 모습이다.
 
 ![bpftool feature probe — 실제 터미널 캡처](images/more/w11_feature.png)
 
-위는 `sudo bpftool feature probe` 로 현재 커널이 지원하는 eBPF 기능(맵 타입·프로그램 타입·헬퍼 등) 목록을 뽑아 본 실제 터미널 캡처입니다. CO-RE·ring buffer 같은 기능이 이 커널에서 실제로 가능한지 한눈에 확인할 수 있습니다.
+위는 `sudo bpftool feature probe` 로 현재 커널이 지원하는 eBPF 기능(맵 타입·프로그램 타입·헬퍼 등) 목록을 뽑아 본 실제 터미널 캡처다. CO-RE·ring buffer 같은 기능이 이 커널에서 실제로 가능한지 한눈에 확인할 수 있다.
 
 ---
 

@@ -6,7 +6,7 @@
 
 last_updated: 2026-06-12
 
-> 슬라이드 출처: <https://oslab.kaist.ac.kr/ostepslides/> (파일명으로 찾으세요). eBPF 실습은 VM `ssh ossca-ebpf`(sudo).
+> 슬라이드 출처: <https://oslab.kaist.ac.kr/ostepslides/> (파일명으로 찾는다). eBPF 실습은 VM `ssh ossca-ebpf`(sudo).
 > 모든 eBPF 화면은 실제 캡처([OS 트랙](README.md) 참고). 깊은 개념은 [V/C/P 모듈](README.md)에 정리돼 있다.
 
 ---

@@ -1,6 +1,6 @@
 # [1부 가상화] V3 · CPU 스케줄링 (OSTEP 7–10장)
 
-> OSTEP의 스케줄링 정책(FIFO·SJF·RR·MLFQ·추첨·멀티프로세서)을 시뮬레이터로 배우고, eBPF의 `runqlat` 로 실제 리눅스 스케줄러가 만든 "런큐 대기 시간"을 측정합니다.
+> OSTEP의 스케줄링 정책(FIFO·SJF·RR·MLFQ·추첨·멀티프로세서)을 시뮬레이터로 배우고, eBPF의 `runqlat` 로 실제 리눅스 스케줄러가 만든 "런큐 대기 시간"을 측정한다.
 
 last_updated: 2026-06-12
 
@@ -10,7 +10,7 @@ last_updated: 2026-06-12
 
 ---
 
-> 🔰 입문자: 모르는 용어는 [용어집](../00c_용어집_약어사전.md), C코드는 [C 미니부록](../00b_준비_C언어_미니부록.md)을 참고하세요.
+> 🔰 입문자: 모르는 용어는 [용어집](../00c_용어집_약어사전.md), C코드는 [C 미니부록](../00b_준비_C언어_미니부록.md)을 참고한다.
 
 ## 이 모듈에서 배우는 것 (OSTEP ↔ eBPF)
 
@@ -28,7 +28,7 @@ last_updated: 2026-06-12
 
 ### 📖 OSTEP에서는
 
-OSTEP 7장은 **CPU 스케줄링 정책**을 다룹니다. 여러 프로세스가 Ready 상태로 줄 서 있을 때, OS는 누구에게 CPU를 줄지 정해야 합니다. 두 가지 핵심 지표로 정책을 평가합니다.
+OSTEP 7장은 **CPU 스케줄링 정책**을 다룬다. 여러 프로세스가 Ready 상태로 줄 서 있을 때, OS는 누구에게 CPU를 줄지 정해야 한다. 두 가지 핵심 지표로 정책을 평가한다.
 
 - **반환 시간(turnaround time)** = 완료 시각 − 도착 시각. (얼마나 빨리 끝나나)
 - **응답 시간(response time)** = 처음 실행된 시각 − 도착 시각. (얼마나 빨리 반응하나)
@@ -41,14 +41,14 @@ OSTEP 7장은 **CPU 스케줄링 정책**을 다룹니다. 여러 프로세스�
 | **SJF/STCF** | 짧은 작업 먼저(선점) | 작업 길이를 미리 알아야 함 |
 | **RR(라운드로빈)** | 타임 슬라이스로 번갈아 | 반환 시간은 나쁨, 대신 응답 시간↓ |
 
-OSTEP 시뮬레이터로 라운드로빈을 직접 돌려 봅니다.
+OSTEP 시뮬레이터로 라운드로빈을 직접 돌려 본다.
 
 ![python3 scheduler.py -p RR -q 1 -l 5,5,5 -c 실행 화면 — OSTEP 라운드로빈 시뮬레이션 출력 (실제 터미널 캡처)](../images/os/v3_ostep_sched.png)
 
-위는 `cpu-sched/scheduler.py` 를 라운드로빈(`-p RR`), 타임 슬라이스 1(`-q 1`)로, 길이 5짜리 작업 3개(`-l 5,5,5`)에 대해 돌린 **실제 터미널 캡처**입니다. 읽는 법:
+위는 `cpu-sched/scheduler.py` 를 라운드로빈(`-p RR`), 타임 슬라이스 1(`-q 1`)로, 길이 5짜리 작업 3개(`-l 5,5,5`)에 대해 돌린 **실제 터미널 캡처**다. 읽는 법:
 
-- `-c` 가 매 시각 어느 작업이 실행되는지와 각 작업의 반환/응답 시간을 계산해 줍니다.
-- RR은 작업들을 1틱씩 번갈아 돌리므로 **응답 시간이 짧지만**, 모든 작업이 비슷한 시각에 끝나 **평균 반환 시간은 나빠집니다**. 같은 입력을 `-p FIFO` 로 바꿔 비교해 보면 trade-off 가 드러납니다.
+- `-c` 가 매 시각 어느 작업이 실행되는지와 각 작업의 반환/응답 시간을 계산해 준다.
+- RR은 작업들을 1틱씩 번갈아 돌리므로 **응답 시간이 짧지만**, 모든 작업이 비슷한 시각에 끝나 **평균 반환 시간은 나빠진다**. 같은 입력을 `-p FIFO` 로 바꿔 비교해 보면 trade-off 가 드러난다.
 
 ```bash
 # ~/ostep-homework/cpu-sched 에서
@@ -59,15 +59,15 @@ python3 scheduler.py -p SJF -l 200,20,10 -c     # 짧은 작업 먼저의 효과
 
 ### 🔬 eBPF로는 (실측)
 
-시뮬레이터의 "Ready 큐에서 기다린 시간"은 추상적인 숫자였습니다. 실제 리눅스에서 그 값이 바로 **런큐 지연(run queue latency)** — 프로세스가 깨어나 실행 가능해진 뒤 실제로 CPU를 받기까지 기다린 시간입니다. `runqlat-bpfcc` 가 이걸 히스토그램으로 보여 줍니다.
+시뮬레이터의 "Ready 큐에서 기다린 시간"은 추상적인 숫자였다. 실제 리눅스에서 그 값이 바로 **런큐 지연(run queue latency)** — 프로세스가 깨어나 실행 가능해진 뒤 실제로 CPU를 받기까지 기다린 시간이다. `runqlat-bpfcc` 가 이걸 히스토그램으로 보여 준다.
 
 ![sudo runqlat-bpfcc 실행 화면 — 런큐 대기 시간 히스토그램 (실제 터미널 캡처)](../images/os/v3_runqlat.png)
 
-위는 `yes` 로 CPU 부하를 준 채 `sudo runqlat-bpfcc` 를 돌린 **실제 터미널 캡처**입니다. 읽는 법:
+위는 `yes` 로 CPU 부하를 준 채 `sudo runqlat-bpfcc` 를 돌린 **실제 터미널 캡처**다. 읽는 법:
 
-- 가로축(`usecs`)은 대기 시간 구간(2의 거듭제곱 버킷), `count` 는 그 구간에 들어간 횟수, `distribution` 은 막대그래프입니다.
-- 대부분이 작은 값(수 마이크로초)에 몰려 있으면 CPU가 한가해 거의 즉시 실행됐다는 뜻이고, **부하가 커질수록 분포가 오른쪽(긴 대기)으로 번집니다** — 이것이 OSTEP가 말한 "Ready 큐에서 기다린 시간"의 실측값입니다.
-- 즉 OSTEP scheduler.py 의 응답/대기 개념이, 리눅스에서는 이 히스토그램의 모양으로 나타납니다.
+- 가로축(`usecs`)은 대기 시간 구간(2의 거듭제곱 버킷), `count` 는 그 구간에 들어간 횟수, `distribution` 은 막대그래프다.
+- 대부분이 작은 값(수 마이크로초)에 몰려 있으면 CPU가 한가해 거의 즉시 실행됐다는 뜻이고, **부하가 커질수록 분포가 오른쪽(긴 대기)으로 번진다** — 이것이 OSTEP가 말한 "Ready 큐에서 기다린 시간"의 실측값이다.
+- 즉 OSTEP scheduler.py 의 응답/대기 개념이, 리눅스에서는 이 히스토그램의 모양으로 나타난다.
 
 ### 🛠 직접 해보기
 
@@ -86,11 +86,11 @@ yes > /dev/null & yes > /dev/null & yes > /dev/null &
 
 ### 📖 OSTEP에서는
 
-**MLFQ(8장)** — 작업 길이를 모를 때 쓰는 현실적 스케줄러입니다. 여러 우선순위 큐를 두고, **CPU를 오래 쓰면 우선순위를 낮추고**(연산 위주 작업), **금방 양보하면 높게 유지**(대화형 작업)합니다. 주기적으로 모두를 최상위로 끌어올려 굶주림(starvation)을 막습니다.
+**MLFQ(8장)** — 작업 길이를 모를 때 쓰는 현실적 스케줄러다. 여러 우선순위 큐를 두고, **CPU를 오래 쓰면 우선순위를 낮추고**(연산 위주 작업), **금방 양보하면 높게 유지**(대화형 작업)한다. 주기적으로 모두를 최상위로 끌어올려 굶주림(starvation)을 막는다.
 
-**추첨 스케줄링(9장)** — 각 프로세스에 **티켓**을 나눠 주고 매번 무작위 추첨으로 당첨자에게 CPU를 줍니다. 티켓 수에 **비례**해 CPU를 나눠 갖는 비례 배분(proportional share) 방식입니다.
+**추첨 스케줄링(9장)** — 각 프로세스에 **티켓**을 나눠 주고 매번 무작위 추첨으로 당첨자에게 CPU를 준다. 티켓 수에 **비례**해 CPU를 나눠 갖는 비례 배분(proportional share) 방식이다.
 
-**멀티프로세서(10장)** — CPU가 여러 개면, **캐시 친화성**(같은 작업을 같은 CPU에)과 **부하 균형**(놀고 있는 CPU로 작업 이동)을 동시에 신경 써야 합니다. 보통 CPU마다 별도 큐(per-CPU run queue)를 둡니다.
+**멀티프로세서(10장)** — CPU가 여러 개면, **캐시 친화성**(같은 작업을 같은 CPU에)과 **부하 균형**(놀고 있는 CPU로 작업 이동)을 동시에 신경 써야 한다. 보통 CPU마다 별도 큐(per-CPU run queue)를 둔다.
 
 ```bash
 python3 ../cpu-sched-mlfq/mlfq.py -n 3 -j 3 -c          # MLFQ 3단계, 작업 3개
@@ -100,9 +100,9 @@ python3 ../cpu-sched-multi/multi.py -n 2 -L a:100:100 -c # CPU 2개 멀티프로
 
 ### 🔬 eBPF로는 (실측)
 
-리눅스의 실제 스케줄러는 오랫동안 **CFS(Completely Fair Scheduler)** 였고 커널 6.6부터 **EEVDF** 로 바뀌었습니다. 둘 다 OSTEP의 MLFQ·추첨과 같은 목표(대화형 작업 우대 + 공정한 비례 배분)를 추구하지만, **가상 실행시간(vruntime)** 기반의 정교한 방식을 씁니다. 우리 VM(커널 6.17)은 EEVDF 를 씁니다.
+리눅스의 실제 스케줄러는 오랫동안 **CFS(Completely Fair Scheduler)** 였고 커널 6.6부터 **EEVDF** 로 바뀌었다. 둘 다 OSTEP의 MLFQ·추첨과 같은 목표(대화형 작업 우대 + 공정한 비례 배분)를 추구하지만, **가상 실행시간(vruntime)** 기반의 정교한 방식을 쓴다. 우리 VM(커널 6.17)은 EEVDF 를 쓴다.
 
-`runqlat` 은 이 스케줄러가 만들어 내는 결과(런큐 지연)를 정책과 무관하게 측정합니다. 멀티프로세서이므로 리눅스는 **CPU별 런큐**를 운영하는데, `runqlat -C` 로 CPU별로 나눠 보면 OSTEP 10장의 "per-CPU run queue"가 실제로 존재함을 확인할 수 있습니다.
+`runqlat` 은 이 스케줄러가 만들어 내는 결과(런큐 지연)를 정책과 무관하게 측정한다. 멀티프로세서이므로 리눅스는 **CPU별 런큐**를 운영하는데, `runqlat -C` 로 CPU별로 나눠 보면 OSTEP 10장의 "per-CPU run queue"가 실제로 존재함을 확인할 수 있다.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"background":"#ffffff","primaryColor":"#ffffff","primaryBorderColor":"#000000","primaryTextColor":"#000000","secondaryColor":"#ffffff","secondaryBorderColor":"#000000","secondaryTextColor":"#000000","tertiaryColor":"#ffffff","tertiaryBorderColor":"#000000","tertiaryTextColor":"#000000","lineColor":"#000000","textColor":"#000000","mainBkg":"#ffffff","secondBkg":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#000000","edgeLabelBackground":"#ffffff","nodeBorder":"#000000","defaultLinkColor":"#000000","titleColor":"#000000","actorBkg":"#ffffff","actorBorder":"#000000","actorTextColor":"#000000","actorLineColor":"#000000","signalColor":"#000000","signalTextColor":"#000000","labelBoxBkgColor":"#ffffff","labelBoxBorderColor":"#000000","labelTextColor":"#000000","loopTextColor":"#000000","noteBkgColor":"#ffffff","noteBorderColor":"#000000","noteTextColor":"#000000","activationBkgColor":"#ffffff","activationBorderColor":"#000000","sequenceNumberColor":"#000000","cScale0":"#ffffff","cScale1":"#ffffff","cScale2":"#ffffff","cScale3":"#ffffff","cScale4":"#ffffff","cScale5":"#ffffff","cScale6":"#ffffff","cScale7":"#ffffff","cScale8":"#ffffff","cScale9":"#ffffff","cScale10":"#ffffff","cScale11":"#ffffff","cScaleLabel0":"#000000","cScaleLabel1":"#000000","cScaleLabel2":"#000000","cScaleLabel3":"#000000","cScaleLabel4":"#000000","cScaleLabel5":"#000000","cScaleLabel6":"#000000","cScaleLabel7":"#000000","cScaleLabel8":"#000000","cScaleLabel9":"#000000","cScaleLabel10":"#000000","cScaleLabel11":"#000000","pie1":"#ffffff","pie2":"#eeeeee","pie3":"#dddddd","pie4":"#cccccc","fontFamily":"Georgia, serif"}}}%%
@@ -219,23 +219,23 @@ sudo python3 labs/02_스케줄러/runq_latency.py --duration 5
 ## ✅ 자가점검 퀴즈
 
 <details><summary>Q1. 라운드로빈(RR)은 어떤 지표가 좋고 어떤 지표가 나쁜가?</summary>
-응답 시간이 좋습니다(모든 작업이 금방 한 번씩 실행됨). 대신 평균 반환 시간은 나쁩니다(작업들이 비슷한 시각에 함께 끝남). scheduler.py 로 FIFO 와 비교하면 확인됩니다.
+응답 시간이 좋다(모든 작업이 금방 한 번씩 실행됨). 대신 평균 반환 시간은 나쁘다(작업들이 비슷한 시각에 함께 끝남). scheduler.py 로 FIFO 와 비교하면 확인된다.
 </details>
 
 <details><summary>Q2. `runqlat` 이 측정하는 "런큐 지연"은 OSTEP의 무엇에 대응하나?</summary>
-프로세스가 Ready 큐에서 CPU를 받기까지 기다린 시간입니다. OSTEP scheduler.py 의 대기·응답 시간 개념의 실제 리눅스 측정값입니다.
+프로세스가 Ready 큐에서 CPU를 받기까지 기다린 시간이다. OSTEP scheduler.py 의 대기·응답 시간 개념의 실제 리눅스 측정값이다.
 </details>
 
 <details><summary>Q3. MLFQ는 작업 길이를 모르는데 어떻게 대화형 작업을 우대하나?</summary>
-행동을 관찰합니다. CPU를 오래 쓰면 우선순위를 낮추고, 슬라이스를 다 쓰기 전에 양보(I/O 대기)하면 높은 우선순위를 유지합니다. 대화형 작업은 자주 양보하므로 자연히 우대됩니다.
+행동을 관찰한다. CPU를 오래 쓰면 우선순위를 낮추고, 슬라이스를 다 쓰기 전에 양보(I/O 대기)하면 높은 우선순위를 유지한다. 대화형 작업은 자주 양보하므로 자연히 우대된다.
 </details>
 
 <details><summary>Q4. 멀티프로세서에서 CPU별 런큐를 쓰는 이유 하나는?</summary>
-캐시 친화성과 확장성입니다. 작업을 같은 CPU에 묶어 두면 캐시가 따뜻하게 유지되고, 하나의 전역 큐를 모든 CPU가 잠그며 경쟁하는 비용도 피합니다. `runqlat -C` 로 CPU별 분포를 볼 수 있습니다.
+캐시 친화성과 확장성이다. 작업을 같은 CPU에 묶어 두면 캐시가 따뜻하게 유지되고, 하나의 전역 큐를 모든 CPU가 잠그며 경쟁하는 비용도 피한다. `runqlat -C` 로 CPU별 분포를 볼 수 있다.
 </details>
 
 <details><summary>Q5. 우리 실습 VM(커널 6.17)의 기본 스케줄러는?</summary>
-EEVDF 입니다(커널 6.6부터 CFS를 대체). 둘 다 vruntime 기반으로 공정한 비례 배분과 대화형 우대를 추구합니다.
+EEVDF 다(커널 6.6부터 CFS를 대체). 둘 다 vruntime 기반으로 공정한 비례 배분과 대화형 우대를 추구한다.
 </details>
 
 ---
@@ -248,4 +248,4 @@ EEVDF 입니다(커널 6.6부터 CFS를 대체). 둘 다 vruntime 기반으로 �
 
 ## ⏭ 다음 모듈
 
-[V4 · 가상 메모리: 주소 공간과 페이징](V4_가상메모리_주소공간_페이징.md) — CPU 가상화에서 메모리 가상화로 넘어가, 주소 공간·페이징·TLB·페이지 폴트를 봅니다.
+[V4 · 가상 메모리: 주소 공간과 페이징](V4_가상메모리_주소공간_페이징.md) — CPU 가상화에서 메모리 가상화로 넘어가, 주소 공간·페이징·TLB·페이지 폴트를 본다.
